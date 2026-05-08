@@ -1,0 +1,14 @@
+node_modules
+dist
+.DS_Store
+.env
+.env.local
+.env.production
+coverage
+*.log
+*.xlsx
+*.html
+mapa_v7_4.html
+~$*.xlsx
+apps/api/uploads
+apps/api/exports

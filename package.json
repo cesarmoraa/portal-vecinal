@@ -1,0 +1,23 @@
+{
+  "name": "comunidad-cobros",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace api & npm run dev --workspace web",
+    "dev:api": "npm run dev --workspace api",
+    "dev:web": "npm run dev --workspace web",
+    "build": "npm run build --workspace api && npm run build --workspace web",
+    "lint": "npm run lint --workspace api && npm run lint --workspace web",
+    "import:excel": "npm run import:excel --workspace api",
+    "export:excel": "npm run export:excel --workspace api",
+    "seed:admin": "npm run seed:admin --workspace api"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+
