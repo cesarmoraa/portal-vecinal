@@ -8,6 +8,7 @@ coverage
 *.log
 *.xlsx
 *.html
+!apps/web/index.html
 mapa_v7_4.html
 ~$*.xlsx
 apps/api/uploads
