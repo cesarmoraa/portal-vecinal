@@ -21,7 +21,32 @@ function buildParsedPaymentsMap(payments) {
   }, {});
 }
 
-async function upsertImportedPayment(client, payment) {
+async function getPublicTableColumns(client, tableName) {
+  const result = await client.query(
+    `
+      select column_name
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = $1
+    `,
+    [tableName],
+  );
+
+  return new Set(result.rows.map((row) => row.column_name));
+}
+
+function buildDynamicInsert(tableName, payload) {
+  const entries = Object.entries(payload);
+  const columns = entries.map(([column]) => column).join(", ");
+  const placeholders = entries.map((_, index) => `$${index + 1}`).join(", ");
+
+  return {
+    sql: `insert into ${tableName} (${columns}) values (${placeholders})`,
+    values: entries.map(([, value]) => value),
+  };
+}
+
+async function upsertImportedPayment(client, payment, paymentColumns) {
   const existing = await client.query(
     `
       select id
@@ -36,58 +61,61 @@ async function upsertImportedPayment(client, payment) {
     [payment.vecinoId, payment.concepto, payment.source, payment.sourceRef ?? null],
   );
 
+  const mutableFields = {
+    monto: payment.monto,
+    fecha_pago: payment.fechaPago,
+    period_year: payment.periodYear,
+    period_month: payment.periodMonth,
+    observacion: payment.observacion,
+  };
+
+  if (paymentColumns.has("concepto")) {
+    mutableFields.concepto = payment.concepto;
+  }
+
+  if (paymentColumns.has("tipo_pago")) {
+    mutableFields.tipo_pago = payment.concepto;
+  }
+
   if (existing.rowCount > 0) {
+    const updates = Object.keys(mutableFields)
+      .map((column, index) => `${column} = $${index + 2}`)
+      .join(", ");
+
     await client.query(
       `
         update pagos
         set
-          monto = $2,
-          fecha_pago = $3,
-          period_year = $4,
-          period_month = $5,
-          observacion = $6,
+          ${updates},
           updated_at = now()
         where id = $1
       `,
-      [
-        existing.rows[0].id,
-        payment.monto,
-        payment.fechaPago,
-        payment.periodYear,
-        payment.periodMonth,
-        payment.observacion,
-      ],
+      [existing.rows[0].id, ...Object.values(mutableFields)],
     );
     return;
   }
 
-  await client.query(
-    `
-      insert into pagos (
-        vecino_id,
-        concepto,
-        monto,
-        fecha_pago,
-        period_year,
-        period_month,
-        observacion,
-        source,
-        source_ref
-      )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `,
-    [
-      payment.vecinoId,
-      payment.concepto,
-      payment.monto,
-      payment.fechaPago,
-      payment.periodYear,
-      payment.periodMonth,
-      payment.observacion,
-      payment.source,
-      payment.sourceRef,
-    ],
-  );
+  const payload = {
+    vecino_id: payment.vecinoId,
+    monto: payment.monto,
+    fecha_pago: payment.fechaPago,
+    period_year: payment.periodYear,
+    period_month: payment.periodMonth,
+    observacion: payment.observacion,
+    source: payment.source,
+    source_ref: payment.sourceRef,
+  };
+
+  if (paymentColumns.has("concepto")) {
+    payload.concepto = payment.concepto;
+  }
+
+  if (paymentColumns.has("tipo_pago")) {
+    payload.tipo_pago = payment.concepto;
+  }
+
+  const insert = buildDynamicInsert("pagos", payload);
+  await client.query(insert.sql, insert.values);
 }
 
 async function upsertVecino(client, vecino) {
@@ -171,6 +199,72 @@ async function upsertVecino(client, vecino) {
   );
 
   return inserted.rows[0].id;
+}
+
+async function createVecinoUser(client, initialPin, vecinoId, userColumns) {
+  const payload = {
+    role: initialPin.role,
+    vecino_id: vecinoId,
+    username: initialPin.username,
+    pasaje: initialPin.pasaje,
+    numeracion: initialPin.numeracion,
+    full_name: initialPin.fullName,
+    phone: initialPin.phone,
+    must_change_password: initialPin.mustChangePassword,
+  };
+
+  if (userColumns.has("pin_hash")) {
+    payload.pin_hash = initialPin.pinHash;
+  }
+
+  if (userColumns.has("password_hash")) {
+    payload.password_hash = initialPin.pinHash;
+  }
+
+  if (userColumns.has("active")) {
+    payload.active = true;
+  }
+
+  if (userColumns.has("activo")) {
+    payload.activo = true;
+  }
+
+  const insert = buildDynamicInsert("users", payload);
+  await client.query(insert.sql, insert.values);
+}
+
+async function updateVecinoUser(client, vecino, vecinoId, userColumns) {
+  const fields = {
+    vecino_id: vecinoId,
+    username: `${vecino.pasaje} ${vecino.numeracion}`.trim(),
+    full_name: vecino.representanteNombre,
+    phone: vecino.telefono,
+  };
+
+  if (userColumns.has("active")) {
+    fields.active = true;
+  }
+
+  if (userColumns.has("activo")) {
+    fields.activo = true;
+  }
+
+  const fieldNames = Object.keys(fields);
+  const updates = fieldNames
+    .map((column, index) => `${column} = $${index + 1}`)
+    .join(", ");
+
+  await client.query(
+    `
+      update users
+      set
+        ${updates}
+      where role = 'vecino'
+        and pasaje = $${fieldNames.length + 1}
+        and numeracion = $${fieldNames.length + 2}
+    `,
+    [...Object.values(fields), vecino.pasaje, vecino.numeracion],
+  );
 }
 
 export async function updateBillingConfig({ actor, req, concept, payload }) {
@@ -272,7 +366,11 @@ export async function importWorkbookToDatabase({
   const parsed = await parseExcelWorkbook(source, year);
 
   return withTransaction(async (client) => {
-    const configs = await fetchConfigs(client);
+    const [configs, userColumns, paymentColumns] = await Promise.all([
+      fetchConfigs(client),
+      getPublicTableColumns(client, "users"),
+      getPublicTableColumns(client, "pagos"),
+    ]);
     let importedPaymentsCount = 0;
 
     if (sosMode) {
@@ -306,57 +404,9 @@ export async function importWorkbookToDatabase({
           await hashSecret(last4Digits(vecino.telefono)),
         );
 
-        await client.query(
-          `
-            insert into users (
-              role,
-              vecino_id,
-              username,
-              pasaje,
-              numeracion,
-              full_name,
-              phone,
-              pin_hash,
-              must_change_password,
-              active
-            )
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
-          `,
-          [
-            initialPin.role,
-            vecinoId,
-            initialPin.username,
-            initialPin.pasaje,
-            initialPin.numeracion,
-            initialPin.fullName,
-            initialPin.phone,
-            initialPin.pinHash,
-            initialPin.mustChangePassword,
-          ],
-        );
+        await createVecinoUser(client, initialPin, vecinoId, userColumns);
       } else {
-        await client.query(
-          `
-            update users
-            set
-              vecino_id = $1,
-              username = $2,
-              full_name = $3,
-              phone = $4,
-              active = true
-            where role = 'vecino'
-              and pasaje = $5
-              and numeracion = $6
-          `,
-          [
-            vecinoId,
-            `${vecino.pasaje} ${vecino.numeracion}`.trim(),
-            vecino.representanteNombre,
-            vecino.telefono,
-            vecino.pasaje,
-            vecino.numeracion,
-          ],
-        );
+        await updateVecinoUser(client, vecino, vecinoId, userColumns);
       }
     }
 
@@ -377,7 +427,7 @@ export async function importWorkbookToDatabase({
         observacion: payment.observacion,
         source: payment.source,
         sourceRef: payment.sourceRef,
-      });
+      }, paymentColumns);
       importedPaymentsCount += 1;
     }
 
@@ -424,7 +474,7 @@ export async function importWorkbookToDatabase({
           observacion: `Precarga desde Resumen (${equivalentQuotas} cuotas equivalentes)`,
           source: "excel_resumen",
           sourceRef: `RESUMEN:${concepto}:${year}`,
-        });
+        }, paymentColumns);
         importedPaymentsCount += 1;
       }
     }
