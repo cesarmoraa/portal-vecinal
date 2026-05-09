@@ -21,6 +21,10 @@ function buildParsedPaymentsMap(payments) {
   }, {});
 }
 
+function toLegacyTipoPago(concepto) {
+  return normalizeConcept(concepto).toLowerCase();
+}
+
 async function getPublicTableColumns(client, tableName) {
   const result = await client.query(
     `
@@ -74,7 +78,7 @@ async function upsertImportedPayment(client, payment, paymentColumns) {
   }
 
   if (paymentColumns.has("tipo_pago")) {
-    mutableFields.tipo_pago = payment.concepto;
+    mutableFields.tipo_pago = toLegacyTipoPago(payment.concepto);
   }
 
   if (existing.rowCount > 0) {
@@ -111,7 +115,7 @@ async function upsertImportedPayment(client, payment, paymentColumns) {
   }
 
   if (paymentColumns.has("tipo_pago")) {
-    payload.tipo_pago = payment.concepto;
+    payload.tipo_pago = toLegacyTipoPago(payment.concepto);
   }
 
   const insert = buildDynamicInsert("pagos", payload);
