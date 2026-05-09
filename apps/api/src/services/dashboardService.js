@@ -6,6 +6,7 @@ import {
   roundCurrency,
   roundQuotas,
 } from "../lib/finance.js";
+import { normalizeConcept } from "../lib/normalizers.js";
 
 export async function fetchConfigs(db = { query }) {
   const result = await db.query(
@@ -17,7 +18,10 @@ export async function fetchConfigs(db = { query }) {
   );
 
   return result.rows.reduce((acc, row) => {
-    acc[row.concepto] = row;
+    acc[normalizeConcept(row.concepto)] = {
+      ...row,
+      concepto: normalizeConcept(row.concepto),
+    };
     return acc;
   }, {});
 }

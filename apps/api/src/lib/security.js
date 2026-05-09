@@ -32,7 +32,7 @@ export function setSessionCookie(res, token) {
   res.cookie(env.cookieName, token, {
     httpOnly: true,
     secure: env.cookieSecure,
-    sameSite: "lax",
+    sameSite: env.cookieSameSite,
     maxAge: 1000 * 60 * 60 * 8,
   });
 }
@@ -41,7 +41,7 @@ export function clearSessionCookie(res) {
   res.clearCookie(env.cookieName, {
     httpOnly: true,
     secure: env.cookieSecure,
-    sameSite: "lax",
+    sameSite: env.cookieSameSite,
   });
 }
 
@@ -54,4 +54,3 @@ export function extractIp(req) {
 
   return req.ip;
 }
-

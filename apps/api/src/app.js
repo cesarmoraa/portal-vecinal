@@ -4,7 +4,8 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import morgan from "morgan";
-import { env } from "./config/env.js";
+import { env, isPlaceholderDatabaseUrl } from "./config/env.js";
+import { query } from "./db/pool.js";
 import { authRoutes } from "./routes/authRoutes.js";
 import { dashboardRoutes } from "./routes/dashboardRoutes.js";
 import { paymentRoutes } from "./routes/paymentRoutes.js";
@@ -38,8 +39,26 @@ export function createApp() {
     message: { error: "Demasiados intentos de acceso. Intenta nuevamente más tarde." },
   });
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, service: "comunidad-cobros-api" });
+  app.get("/api/health", async (_req, res) => {
+    if (isPlaceholderDatabaseUrl(env.databaseUrl)) {
+      res.status(503).json({
+        ok: false,
+        service: "comunidad-cobros-api",
+        database: "misconfigured",
+      });
+      return;
+    }
+
+    try {
+      await query("select 1");
+      res.json({ ok: true, service: "comunidad-cobros-api", database: "up" });
+    } catch (_error) {
+      res.status(503).json({
+        ok: false,
+        service: "comunidad-cobros-api",
+        database: "down",
+      });
+    }
   });
 
   app.use("/api/auth", loginLimiter, authRoutes);
@@ -53,4 +72,3 @@ export function createApp() {
 
   return app;
 }
-

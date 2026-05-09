@@ -148,6 +148,8 @@ function PaymentEditor({
 
 export function TreasurerDashboardPage() {
   const [overview, setOverview] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [results, setResults] = useState([]);
   const [selectedVecino, setSelectedVecino] = useState(null);
@@ -155,8 +157,17 @@ export function TreasurerDashboardPage() {
   const [selectedPayment, setSelectedPayment] = useState(null);
 
   async function loadOverview() {
-    const response = await apiRequest("/dashboard/overview");
-    setOverview(response);
+    setLoading(true);
+    setLoadError("");
+
+    try {
+      const response = await apiRequest("/dashboard/overview");
+      setOverview(response);
+    } catch (error) {
+      setLoadError(error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadLedger(vecinoId) {
@@ -166,7 +177,7 @@ export function TreasurerDashboardPage() {
   }
 
   useEffect(() => {
-    loadOverview().catch(console.error);
+    loadOverview();
   }, []);
 
   useEffect(() => {
@@ -184,8 +195,26 @@ export function TreasurerDashboardPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  if (!overview) {
+  if (loading) {
     return <div className="centered-screen">Cargando dashboard tesorero...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="centered-screen">
+        <div className="stack-form" style={{ width: "min(32rem, 92vw)" }}>
+          <strong>No se pudo cargar el panel tesorero.</strong>
+          <p className="form-error">{loadError}</p>
+          <button className="primary-button" onClick={() => loadOverview()} type="button">
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!overview) {
+    return <div className="centered-screen">No hay datos disponibles.</div>;
   }
 
   return (
@@ -308,4 +337,3 @@ export function TreasurerDashboardPage() {
     </LayoutShell>
   );
 }
-

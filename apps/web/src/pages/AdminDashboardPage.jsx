@@ -6,6 +6,8 @@ import { formatCurrency, formatDate } from "../lib/formatters.js";
 
 export function AdminDashboardPage() {
   const [overview, setOverview] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [audit, setAudit] = useState([]);
   const [vecinoSearch, setVecinoSearch] = useState("");
   const [vecinoResults, setVecinoResults] = useState([]);
@@ -22,21 +24,30 @@ export function AdminDashboardPage() {
   const [message, setMessage] = useState("");
 
   async function loadAdminData() {
-    const [overviewResponse, auditResponse] = await Promise.all([
-      apiRequest("/dashboard/overview"),
-      apiRequest("/admin/auditoria?limit=120"),
-    ]);
+    setLoading(true);
+    setLoadError("");
 
-    setOverview(overviewResponse);
-    setAudit(auditResponse.rows);
-    setConfigForm({
-      PORTONES: overviewResponse.configs.PORTONES,
-      MANTENCION: overviewResponse.configs.MANTENCION,
-    });
+    try {
+      const [overviewResponse, auditResponse] = await Promise.all([
+        apiRequest("/dashboard/overview"),
+        apiRequest("/admin/auditoria?limit=120"),
+      ]);
+
+      setOverview(overviewResponse);
+      setAudit(auditResponse.rows);
+      setConfigForm({
+        PORTONES: overviewResponse.configs.PORTONES,
+        MANTENCION: overviewResponse.configs.MANTENCION,
+      });
+    } catch (error) {
+      setLoadError(error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    loadAdminData().catch(console.error);
+    loadAdminData();
   }, []);
 
   useEffect(() => {
@@ -138,8 +149,26 @@ export function AdminDashboardPage() {
     setMessage("Exportación generada.");
   }
 
-  if (!overview) {
+  if (loading) {
     return <div className="centered-screen">Cargando panel admin...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="centered-screen">
+        <div className="stack-form" style={{ width: "min(32rem, 92vw)" }}>
+          <strong>No se pudo cargar el panel admin.</strong>
+          <p className="form-error">{loadError}</p>
+          <button className="primary-button" onClick={() => loadAdminData()} type="button">
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!overview) {
+    return <div className="centered-screen">No hay datos disponibles.</div>;
   }
 
   return (
@@ -373,4 +402,3 @@ export function AdminDashboardPage() {
     </LayoutShell>
   );
 }
-
