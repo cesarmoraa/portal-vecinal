@@ -122,6 +122,19 @@ Regla de continuidad:
   - `TreasurerDashboardPage` también recibe manejo visible de error
   - ambos paneles muestran mensaje y botón de reintento si falla la carga inicial
 
+### Hallazgo adicional 2026-05-08
+- El frontend público en Render sí quedó desplegado, pero las rutas SPA no estaban configuradas.
+- Evidencia:
+  - `https://portal-vecinal-web.onrender.com/login` devolvía `Not Found`
+  - eso explica por qué entrar directo a rutas como `/login`, `/admin`, `/tesorero` o `/vecino` fallaba aunque el bundle estuviera publicado
+- Causa:
+  - faltaba rewrite de Render para redirigir `/*` hacia `/index.html`
+- Solución aplicada:
+  - se agregó rewrite persistente en `render.yaml`
+  - se agregó `apps/web/public/_redirects` con `/* /index.html 200`
+- Estado esperado:
+  - React Router debe resolver correctamente todas las rutas públicas del frontend
+
 ## Cambios locales aún no publicados
 Estado observado en `git status --short`:
 - `M apps/api/src/app.js`
