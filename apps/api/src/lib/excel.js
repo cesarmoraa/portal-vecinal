@@ -30,6 +30,38 @@ const MONTH_NAMES = [
   "Diciembre",
 ];
 
+function unwrapCellValue(value) {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  if ("result" in value && value.result !== undefined && value.result !== null) {
+    return unwrapCellValue(value.result);
+  }
+
+  if (Array.isArray(value.richText)) {
+    return value.richText.map((part) => part.text ?? "").join("");
+  }
+
+  if ("text" in value && value.text !== undefined && value.text !== null) {
+    return value.text;
+  }
+
+  if ("hyperlink" in value && value.hyperlink) {
+    return value.text ?? value.hyperlink;
+  }
+
+  return value;
+}
+
 function getSheet(workbook, name) {
   const sheet = workbook.getWorksheet(name);
 
@@ -70,7 +102,7 @@ function buildVecinoKey(pasaje, numeracion) {
 }
 
 function readCell(row, indexes, header) {
-  return row.getCell(indexes[header]).value;
+  return unwrapCellValue(row.getCell(indexes[header]).value);
 }
 
 function sheetRowCount(sheet) {
@@ -355,15 +387,21 @@ export async function buildExportWorkbook({ financials, paymentsByVecino, year }
     for (const concept of ["PORTONES", "MANTENCION"]) {
       const monthlyValues = new Array(12).fill(null);
       const payments = paymentsByVecino[item.vecinoId]?.[concept] ?? [];
+      let nonMonthlyTotal = 0;
 
       for (const payment of payments) {
         if (payment.periodYear === year && payment.periodMonth >= 1 && payment.periodMonth <= 12) {
           monthlyValues[payment.periodMonth - 1] =
             (monthlyValues[payment.periodMonth - 1] ?? 0) + Number(payment.monto);
+          continue;
         }
+
+        nonMonthlyTotal += Number(payment.monto);
       }
 
       const targetSheet = concept === "PORTONES" ? portonesSheet : mantencionesSheet;
+      const rowTotal =
+        monthlyValues.reduce((sum, value) => sum + Number(value ?? 0), 0) + nonMonthlyTotal;
       const newRow = targetSheet.addRow([
         item.pasaje,
         item.numeracion,
@@ -374,13 +412,10 @@ export async function buildExportWorkbook({ financials, paymentsByVecino, year }
         item.latitud,
         item.longitud,
         ...monthlyValues,
-        monthlyValues.reduce((sum, value) => sum + Number(value ?? 0), 0),
+        rowTotal,
       ]);
 
-      newRow.getCell(21).value = {
-        formula: `SUM(I${newRow.number}:T${newRow.number})`,
-        result: monthlyValues.reduce((sum, value) => sum + Number(value ?? 0), 0),
-      };
+      newRow.getCell(21).value = rowTotal;
     }
   }
 
@@ -427,4 +462,3 @@ export function groupPaymentsByVecino(payments) {
 }
 
 export { MONTH_NAMES, indexToMonthName };
-

@@ -120,19 +120,23 @@ export function AdminDashboardPage() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", importFile);
-    formData.append("year", String(new Date().getFullYear()));
-    formData.append("sosMode", "false");
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+      formData.append("year", String(new Date().getFullYear()));
+      formData.append("sosMode", "false");
 
-    const response = await apiRequest("/admin/import-excel", {
-      method: "POST",
-      body: formData,
-    });
-    setMessage(
-      `Importación completada: ${response.importedVecinos} vecinos y ${response.importedPayments} pagos.`,
-    );
-    await loadAdminData();
+      const response = await apiRequest("/admin/import-excel", {
+        method: "POST",
+        body: formData,
+      });
+      setMessage(
+        `Importación completada: ${response.importedVecinos} vecinos y ${response.importedPayments} pagos.`,
+      );
+      await loadAdminData();
+    } catch (error) {
+      setMessage(error.message ?? "No se pudo importar el Excel.");
+    }
   }
 
   async function handleExport() {

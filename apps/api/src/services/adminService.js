@@ -13,6 +13,83 @@ import {
   fetchVecinos,
 } from "./dashboardService.js";
 
+function buildParsedPaymentsMap(payments) {
+  return payments.reduce((acc, payment) => {
+    const key = `${payment.vecinoKey}:${payment.concepto}`;
+    acc[key] = (acc[key] ?? 0) + Number(payment.monto);
+    return acc;
+  }, {});
+}
+
+async function upsertImportedPayment(client, payment) {
+  const existing = await client.query(
+    `
+      select id
+      from pagos
+      where vecino_id = $1
+        and concepto = $2
+        and source = $3
+        and source_ref is not distinct from $4
+        and deleted_at is null
+      limit 1
+    `,
+    [payment.vecinoId, payment.concepto, payment.source, payment.sourceRef ?? null],
+  );
+
+  if (existing.rowCount > 0) {
+    await client.query(
+      `
+        update pagos
+        set
+          monto = $2,
+          fecha_pago = $3,
+          period_year = $4,
+          period_month = $5,
+          observacion = $6,
+          updated_at = now()
+        where id = $1
+      `,
+      [
+        existing.rows[0].id,
+        payment.monto,
+        payment.fechaPago,
+        payment.periodYear,
+        payment.periodMonth,
+        payment.observacion,
+      ],
+    );
+    return;
+  }
+
+  await client.query(
+    `
+      insert into pagos (
+        vecino_id,
+        concepto,
+        monto,
+        fecha_pago,
+        period_year,
+        period_month,
+        observacion,
+        source,
+        source_ref
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `,
+    [
+      payment.vecinoId,
+      payment.concepto,
+      payment.monto,
+      payment.fechaPago,
+      payment.periodYear,
+      payment.periodMonth,
+      payment.observacion,
+      payment.source,
+      payment.sourceRef,
+    ],
+  );
+}
+
 export async function updateBillingConfig({ actor, req, concept, payload }) {
   const normalizedConcept = normalizeConcept(concept);
 
@@ -112,14 +189,18 @@ export async function importWorkbookToDatabase({
   const parsed = await parseExcelWorkbook(source, year);
 
   return withTransaction(async (client) => {
+    const configs = await fetchConfigs(client);
+    let importedPaymentsCount = 0;
+
     if (sosMode) {
       await client.query(
-        "delete from pagos where source = 'excel' and period_year = $1",
+        "delete from pagos where source in ('excel', 'excel_resumen') and period_year = $1",
         [year],
       );
     }
 
     const vecinoIdByKey = new Map();
+    const importedMonthlyTotals = buildParsedPaymentsMap(parsed.payments);
 
     for (const vecino of parsed.vecinos) {
       const result = await client.query(
@@ -243,42 +324,66 @@ export async function importWorkbookToDatabase({
         continue;
       }
 
-      await client.query(
-        `
-          insert into pagos (
-            vecino_id,
-            concepto,
-            monto,
-            fecha_pago,
-            period_year,
-            period_month,
-            observacion,
-            source,
-            source_ref
-          )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          on conflict (vecino_id, concepto, source, source_ref)
-          where source_ref is not null and deleted_at is null
-          do update
-          set
-            monto = excluded.monto,
-            fecha_pago = excluded.fecha_pago,
-            period_year = excluded.period_year,
-            period_month = excluded.period_month,
-            observacion = excluded.observacion
-        `,
-        [
+      await upsertImportedPayment(client, {
+        vecinoId,
+        concepto: payment.concepto,
+        monto: payment.monto,
+        fechaPago: payment.fechaPago,
+        periodYear: payment.periodYear,
+        periodMonth: payment.periodMonth,
+        observacion: payment.observacion,
+        source: payment.source,
+        sourceRef: payment.sourceRef,
+      });
+      importedPaymentsCount += 1;
+    }
+
+    for (const vecino of parsed.vecinos) {
+      const vecinoId = vecinoIdByKey.get(`${vecino.pasaje}::${vecino.numeracion}`);
+
+      if (!vecinoId) {
+        continue;
+      }
+
+      for (const [concepto, equivalentQuotas] of [
+        ["PORTONES", Number(vecino.cuotaPortonesInicial) || 0],
+        ["MANTENCION", Number(vecino.cuotaMantencionInicial) || 0],
+      ]) {
+        if (equivalentQuotas <= 0) {
+          continue;
+        }
+
+        const config = configs[normalizeConcept(concepto)];
+
+        if (!config?.valor_cuota) {
+          throw new AppError(
+            400,
+            `Falta configuración activa para ${concepto}. Ajusta CONFIGURACION_COBROS antes de importar.`,
+          );
+        }
+
+        const targetAmount = equivalentQuotas * Number(config.valor_cuota);
+        const alreadyImportedAmount =
+          importedMonthlyTotals[`${vecino.pasaje}::${vecino.numeracion}:${concepto}`] ?? 0;
+        const missingAmount = Math.max(0, targetAmount - alreadyImportedAmount);
+
+        if (missingAmount <= 0) {
+          continue;
+        }
+
+        await upsertImportedPayment(client, {
           vecinoId,
-          payment.concepto,
-          payment.monto,
-          payment.fechaPago,
-          payment.periodYear,
-          payment.periodMonth,
-          payment.observacion,
-          payment.source,
-          payment.sourceRef,
-        ],
-      );
+          concepto,
+          monto: missingAmount,
+          fechaPago: `${year}-01-01`,
+          periodYear: year,
+          periodMonth: null,
+          observacion: `Precarga desde Resumen (${equivalentQuotas} cuotas equivalentes)`,
+          source: "excel_resumen",
+          sourceRef: `RESUMEN:${concepto}:${year}`,
+        });
+        importedPaymentsCount += 1;
+      }
     }
 
     await logAudit({
@@ -291,7 +396,7 @@ export async function importWorkbookToDatabase({
       entityId: `${year}`,
       newValue: {
         vecinos: parsed.vecinos.length,
-        pagos: parsed.payments.length,
+        pagos: importedPaymentsCount,
         sosMode,
       },
       db: client,
@@ -299,7 +404,7 @@ export async function importWorkbookToDatabase({
 
     return {
       importedVecinos: parsed.vecinos.length,
-      importedPayments: parsed.payments.length,
+      importedPayments: importedPaymentsCount,
       sosMode,
     };
   });
