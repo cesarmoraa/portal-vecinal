@@ -311,6 +311,7 @@ export async function importWorkbookToDatabase({
             insert into users (
               role,
               vecino_id,
+              username,
               pasaje,
               numeracion,
               full_name,
@@ -319,11 +320,12 @@ export async function importWorkbookToDatabase({
               must_change_password,
               active
             )
-            values ($1, $2, $3, $4, $5, $6, $7, $8, true)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
           `,
           [
             initialPin.role,
             vecinoId,
+            initialPin.username,
             initialPin.pasaje,
             initialPin.numeracion,
             initialPin.fullName,
@@ -338,15 +340,17 @@ export async function importWorkbookToDatabase({
             update users
             set
               vecino_id = $1,
-              full_name = $2,
-              phone = $3,
+              username = $2,
+              full_name = $3,
+              phone = $4,
               active = true
             where role = 'vecino'
-              and pasaje = $4
-              and numeracion = $5
+              and pasaje = $5
+              and numeracion = $6
           `,
           [
             vecinoId,
+            `${vecino.pasaje} ${vecino.numeracion}`.trim(),
             vecino.representanteNombre,
             vecino.telefono,
             vecino.pasaje,

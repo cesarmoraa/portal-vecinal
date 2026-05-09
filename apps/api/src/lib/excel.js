@@ -432,6 +432,7 @@ export async function buildExportWorkbook({ financials, paymentsByVecino, year }
 export function buildInitialNeighborUser(vecino, hash) {
   return {
     role: "vecino",
+    username: `${vecino.pasaje} ${vecino.numeracion}`.trim(),
     pasaje: vecino.pasaje,
     numeracion: vecino.numeracion,
     fullName: vecino.representanteNombre,
