@@ -47,6 +47,10 @@ function unwrapCellValue(value) {
     return unwrapCellValue(value.result);
   }
 
+  if ("error" in value && value.error) {
+    return null;
+  }
+
   if (Array.isArray(value.richText)) {
     return value.richText.map((part) => part.text ?? "").join("");
   }
@@ -57,6 +61,10 @@ function unwrapCellValue(value) {
 
   if ("hyperlink" in value && value.hyperlink) {
     return value.text ?? value.hyperlink;
+  }
+
+  if ("formula" in value) {
+    return null;
   }
 
   return value;
