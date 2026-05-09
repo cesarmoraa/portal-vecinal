@@ -132,26 +132,44 @@ Regla de continuidad:
 - Solución aplicada:
   - se agregó rewrite persistente en `render.yaml`
   - se agregó `apps/web/public/_redirects` con `/* /index.html 200`
-- Estado esperado:
-  - React Router debe resolver correctamente todas las rutas públicas del frontend
+- Hallazgo operativo importante:
+  - el cambio en repo no bastó por sí solo para el Static Site ya existente en Render
+  - fue necesario agregar manualmente en Render `Redirects/Rewrites` la regla:
+    - source: `/*`
+    - destination: `/index.html`
+    - action: `Rewrite`
+- Resultado:
+  - React Router ya resuelve correctamente `/login`, `/admin`, `/tesorero` y `/vecino`
+
+### Resolución del panel admin 2026-05-08
+- Se validó login admin real en producción desde navegador.
+- Flujo confirmado:
+  - `POST /api/auth/login` responde correctamente
+  - el browser navega a `/admin`
+  - el panel admin carga completo sin quedar en loading infinito
+- Evidencia funcional observada:
+  - se visualiza `Panel admin`
+  - aparece usuario autenticado `admin`
+  - carga mapa Leaflet
+  - carga configuración global de `PORTONES` y `MANTENCION`
+  - carga formulario de creación de tesorero
+  - carga auditoría con eventos `auth.login_success` y `auth.login_failed`
+- Conclusión:
+  - el bloqueo principal de producción quedó resuelto
+  - los fixes de sesión cross-site y normalización de conceptos quedaron efectivos en producción
+  - la app ya está operativa a nivel de acceso admin
 
 ## Cambios locales aún no publicados
 Estado observado en `git status --short`:
-- `M apps/api/src/app.js`
-- `M apps/api/src/config/env.js`
-- `M apps/api/src/middleware/errorHandler.js`
 - `?? apps/api/scripts/_tmp_inspect_users.mjs`
 - `?? apps/api/scripts/_tmp_migrate_live_schema.mjs`
 - `?? apps/api/scripts/_tmp_seed_admin_treasurer.mjs`
 - `?? apps/api/scripts/_tmp_verify_seeded_users.mjs`
 
 ### Qué hacen esos cambios locales
-- `apps/api/src/app.js`
-  - Endurecimiento del endpoint de health para reflejar mejor problemas de DB.
-- `apps/api/src/config/env.js`
-  - Detección de placeholders o configuración inválida de `DATABASE_URL`.
-- `apps/api/src/middleware/errorHandler.js`
-  - Sanitización de errores técnicos para no exponer mensajes crudos al frontend.
+- Los cambios productivos relevantes de frontend/backend ya fueron publicados.
+- Lo único que sigue local y sin versionar son scripts temporales `_tmp_*`.
+- Los endurecimientos de backend ya quedaron versionados y desplegados.
 
 ### Scripts temporales
 Los archivos `_tmp_*` fueron usados para inspección, compatibilidad de esquema y seed manual en producción.
@@ -198,12 +216,12 @@ Si se rotan credenciales:
 - no registrar el valor secreto
 
 ## Próximos pasos recomendados
-1. Reproducir el bloqueo del panel admin con sesión real y confirmar qué endpoint falla.
-2. Verificar `GET /dashboard/overview` con la sesión admin.
-3. Corregir incompatibilidades restantes entre esquema productivo y consultas del dashboard.
-4. Mostrar errores visibles en frontend para no quedar en loading infinito.
+1. Importar el Excel real para poblar vecinos, mapa y resúmenes.
+2. Probar flujo tesorero end-to-end con registro de pago.
+3. Probar flujo vecino con cambio obligatorio de PIN y panel propio.
+4. Validar exportación Excel recalculada desde producción.
 5. Limpiar y formalizar scripts `_tmp_*`.
-6. Versionar y publicar los cambios locales de hardening del backend.
+6. Si el esquema productivo quedó distinto al `schema.sql`, consolidar una migración formal.
 
 ## Checklist mínima antes de publicar
 - `npm run build --workspace apps/api`
@@ -217,4 +235,4 @@ Si se rotan credenciales:
 
 ## Última actualización
 - Fecha: 2026-05-08
-- Estado: producción operativa en login, dashboard admin todavía con problema de carga infinita
+- Estado: producción operativa con login admin validado en navegador, panel admin cargando correctamente y rewrite SPA ya configurado en Render
