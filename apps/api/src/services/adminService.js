@@ -90,6 +90,89 @@ async function upsertImportedPayment(client, payment) {
   );
 }
 
+async function upsertVecino(client, vecino) {
+  const existing = await client.query(
+    `
+      select id
+      from vecinos
+      where upper(pasaje) = upper($1)
+        and numeracion = $2
+      limit 1
+    `,
+    [vecino.pasaje, vecino.numeracion],
+  );
+
+  if (existing.rowCount > 0) {
+    const updated = await client.query(
+      `
+        update vecinos
+        set
+          comuna = $2,
+          pais = $3,
+          direccion = $4,
+          coordenadas = $5,
+          latitud = $6,
+          longitud = $7,
+          representante_nombre = $8,
+          telefono = $9,
+          firma_vobo = $10,
+          updated_at = now()
+        where id = $1
+        returning id
+      `,
+      [
+        existing.rows[0].id,
+        vecino.comuna,
+        vecino.pais,
+        vecino.direccion,
+        vecino.coordenadas,
+        vecino.latitud,
+        vecino.longitud,
+        vecino.representanteNombre,
+        vecino.telefono,
+        vecino.firmaVobo,
+      ],
+    );
+
+    return updated.rows[0].id;
+  }
+
+  const inserted = await client.query(
+    `
+      insert into vecinos (
+        pasaje,
+        numeracion,
+        comuna,
+        pais,
+        direccion,
+        coordenadas,
+        latitud,
+        longitud,
+        representante_nombre,
+        telefono,
+        firma_vobo
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      returning id
+    `,
+    [
+      vecino.pasaje,
+      vecino.numeracion,
+      vecino.comuna,
+      vecino.pais,
+      vecino.direccion,
+      vecino.coordenadas,
+      vecino.latitud,
+      vecino.longitud,
+      vecino.representanteNombre,
+      vecino.telefono,
+      vecino.firmaVobo,
+    ],
+  );
+
+  return inserted.rows[0].id;
+}
+
 export async function updateBillingConfig({ actor, req, concept, payload }) {
   const normalizedConcept = normalizeConcept(concept);
 
@@ -203,51 +286,7 @@ export async function importWorkbookToDatabase({
     const importedMonthlyTotals = buildParsedPaymentsMap(parsed.payments);
 
     for (const vecino of parsed.vecinos) {
-      const result = await client.query(
-        `
-          insert into vecinos (
-            pasaje,
-            numeracion,
-            comuna,
-            pais,
-            direccion,
-            coordenadas,
-            latitud,
-            longitud,
-            representante_nombre,
-            telefono,
-            firma_vobo
-          )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-          on conflict (pasaje, numeracion) do update
-          set
-            comuna = excluded.comuna,
-            pais = excluded.pais,
-            direccion = excluded.direccion,
-            coordenadas = excluded.coordenadas,
-            latitud = excluded.latitud,
-            longitud = excluded.longitud,
-            representante_nombre = excluded.representante_nombre,
-            telefono = excluded.telefono,
-            firma_vobo = excluded.firma_vobo
-          returning id
-        `,
-        [
-          vecino.pasaje,
-          vecino.numeracion,
-          vecino.comuna,
-          vecino.pais,
-          vecino.direccion,
-          vecino.coordenadas,
-          vecino.latitud,
-          vecino.longitud,
-          vecino.representanteNombre,
-          vecino.telefono,
-          vecino.firmaVobo,
-        ],
-      );
-
-      const vecinoId = result.rows[0].id;
+      const vecinoId = await upsertVecino(client, vecino);
       vecinoIdByKey.set(`${vecino.pasaje}::${vecino.numeracion}`, vecinoId);
 
       const userExists = await client.query(
