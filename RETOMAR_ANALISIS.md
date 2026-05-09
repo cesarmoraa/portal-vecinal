@@ -69,47 +69,58 @@ Regla de continuidad:
 - Backend Render responde correctamente.
 - Frontend Render carga correctamente.
 - Login `admin` y `tesorero` ya fueron validados vía API.
-- La app no está completamente estabilizada después del login.
+- El panel admin quedó operativo y el sistema ya está precargado con el Excel base.
+
+## Importación Excel 2026-05-08
+- Objetivo:
+  - usar `Direcciones BD.xlsx` para precargar la base real del sistema
+  - no solo validar archivo, sino dejar vecinos, pagos y mapa poblados
+- Resultado final:
+  - importación productiva exitosa
+  - `92` vecinos precargados
+  - `120` pagos importados o sintetizados
+- Fuentes usadas del Excel:
+  - hoja `BD` para vecinos y ubicación
+  - hoja `Resumen` para cuotas equivalentes iniciales
+  - hojas `$Portones` y `$Mantenciones` para pagos mensuales explícitos
+- Criterio aplicado:
+  - los pagos mensuales explícitos se importan como movimientos `source = excel`
+  - si `Resumen` trae cuotas equivalentes mayores que lo visto mes a mes, se crea una precarga complementaria `source = excel_resumen`
+  - esa precarga usa la configuración real de `CONFIGURACION_COBROS` para convertir cuotas equivalentes a monto
+
+### Por qué fallaba la importación
+- No era un problema del archivo en sí.
+- La causa real fue deriva de esquema entre la base productiva y el backend actual.
+- Errores encontrados durante el diagnóstico:
+  - `there is no unique or exclusion constraint matching the ON CONFLICT specification`
+  - `null value in column "username" of relation "users" violates not-null constraint`
+  - `null value in column "password_hash" of relation "users" violates not-null constraint`
+  - `new row for relation "pagos" violates check constraint "pagos_tipo_pago_check"`
+
+### Solución aplicada a la importación
+- Se rehízo la importación para que sea tolerante a esquema heredado:
+  - inserción y actualización manual de `vecinos`
+  - inserción y actualización manual de `pagos` importados
+  - detección dinámica de columnas reales en `users` y `pagos`
+  - compatibilidad con `username` y `password_hash` obligatorios en `users`
+  - compatibilidad con `tipo_pago` legacy en minúscula (`portones`, `mantencion`)
+- Se robusteció el parser del Excel:
+  - lectura correcta de celdas con fórmulas y resultados cacheados
+  - celdas con error Excel como `#N/A` ya no terminan en texto basura como `[object Object]`
+  - cuando falta representante o teléfono, el sistema usa valores vacíos o `Sin representante`
+
+### Validación posterior
+- El endpoint `GET /api/dashboard/overview` ya devolvió datos poblados después de importar.
+- El mapa y los resúmenes pueden construirse con datos reales.
+- Casos antes sucios, como nombres o teléfonos en fórmulas fallidas, quedaron limpiados.
 
 ## Problema activo actual
-- Síntoma:
-  - Después del login admin, la UI queda en `Cargando panel admin...`.
-- Evidencia visible:
-  - Capturas de pantalla muestran la pantalla de carga infinita del panel admin.
-- Componente involucrado:
-  - `apps/web/src/pages/AdminDashboardPage.jsx`
-- Flujo involucrado:
-  - `loadAdminData()` llama:
-    - `GET /dashboard/overview`
-    - `GET /admin/auditoria?limit=120`
-- Sospecha técnica principal:
-  - `dashboardService` aún asume columnas del esquema nuevo, por ejemplo:
-    - `vecinos.representante_nombre`
-    - `pagos.concepto`
-    - `pagos.deleted_at`
-  - La base productiva venía de un esquema previo y puede seguir teniendo compatibilidades incompletas para el dashboard.
-- Posible efecto en frontend:
-  - Si `loadAdminData()` falla, el estado `overview` nunca se llena.
-  - El componente queda en:
-    - `if (!overview) return <div className="centered-screen">Cargando panel admin...</div>;`
-  - Además el `catch(console.error)` no muestra error visible en pantalla.
+- No hay un bloqueo funcional abierto en el flujo de importación inicial.
+- El sistema ya quedó con precarga productiva desde Excel.
+- Tema técnico pendiente no bloqueante:
+  - `express-rate-limit` avisa en Render sobre `X-Forwarded-For` y conviene formalizar `trust proxy` en Express para el entorno productivo.
 
-### Diagnóstico refinado 2026-05-08
-- Los endpoints probados manualmente con sesión admin sí responden:
-  - `GET /api/dashboard/overview` -> `200`
-  - `GET /api/admin/auditoria?limit=120` -> `200`
-- Esto indica que el backend base no está caído.
-- Hipótesis más fuerte:
-  - la sesión entre frontend Render y backend Render depende de cookie cross-origin/cross-site
-  - la cookie estaba configurada con `SameSite=Lax`
-  - en producción eso puede impedir que el browser mande la cookie desde `portal-vecinal-web` hacia `portal-vecinal-api`
-  - el login parece exitoso porque el endpoint `/auth/login` devuelve el usuario y el frontend navega con ese payload
-  - luego el panel intenta cargar datos y falla silenciosamente
-- Problema adicional detectado:
-  - `dashboardService.fetchConfigs()` devolvía claves según el valor real de DB, que en producción aparecían en minúscula (`portones`, `mantencion`)
-  - el frontend y el resto del backend esperan `PORTONES` y `MANTENCION`
-
-### Corrección en curso 2026-05-08
+### Correcciones aplicadas 2026-05-08
 - Backend:
   - se agregó soporte de `COOKIE_SAME_SITE`
   - default automático:
@@ -158,6 +169,7 @@ Regla de continuidad:
   - el bloqueo principal de producción quedó resuelto
   - los fixes de sesión cross-site y normalización de conceptos quedaron efectivos en producción
   - la app ya está operativa a nivel de acceso admin
+  - la importación inicial desde Excel ya fue ejecutada con éxito
 
 ## Cambios locales aún no publicados
 Estado observado en `git status --short`:
@@ -216,12 +228,12 @@ Si se rotan credenciales:
 - no registrar el valor secreto
 
 ## Próximos pasos recomendados
-1. Importar el Excel real para poblar vecinos, mapa y resúmenes.
-2. Probar flujo tesorero end-to-end con registro de pago.
-3. Probar flujo vecino con cambio obligatorio de PIN y panel propio.
-4. Validar exportación Excel recalculada desde producción.
-5. Limpiar y formalizar scripts `_tmp_*`.
-6. Si el esquema productivo quedó distinto al `schema.sql`, consolidar una migración formal.
+1. Probar flujo tesorero end-to-end con registro de pago real.
+2. Probar flujo vecino con cambio obligatorio de PIN y panel propio.
+3. Validar exportación Excel recalculada desde producción.
+4. Limpiar y formalizar scripts `_tmp_*`.
+5. Consolidar migración formal para capturar la compatibilidad productiva actual en `schema.sql` o una migración dedicada.
+6. Ajustar `trust proxy` en Express para Render y eliminar la advertencia de rate-limit.
 
 ## Checklist mínima antes de publicar
 - `npm run build --workspace apps/api`
@@ -235,4 +247,4 @@ Si se rotan credenciales:
 
 ## Última actualización
 - Fecha: 2026-05-08
-- Estado: producción operativa con login admin validado en navegador, panel admin cargando correctamente y rewrite SPA ya configurado en Render
+- Estado: producción operativa con login admin validado, panel admin funcional e importación inicial desde `Direcciones BD.xlsx` completada con `92` vecinos y `120` pagos
