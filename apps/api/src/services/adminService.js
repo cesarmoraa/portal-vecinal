@@ -366,11 +366,9 @@ export async function importWorkbookToDatabase({
   const parsed = await parseExcelWorkbook(source, year);
 
   return withTransaction(async (client) => {
-    const [configs, userColumns, paymentColumns] = await Promise.all([
-      fetchConfigs(client),
-      getPublicTableColumns(client, "users"),
-      getPublicTableColumns(client, "pagos"),
-    ]);
+    const configs = await fetchConfigs(client);
+    const userColumns = await getPublicTableColumns(client, "users");
+    const paymentColumns = await getPublicTableColumns(client, "pagos");
     let importedPaymentsCount = 0;
 
     if (sosMode) {
