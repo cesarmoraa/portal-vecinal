@@ -356,9 +356,13 @@ export function AdminDashboardPage() {
               <input
                 type="file"
                 accept=".xlsx"
-                onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => {
+                  setImportFile(event.target.files?.[0] ?? null);
+                  setMessage("");
+                }}
               />
-              <button className="primary-button" type="submit">
+              {importFile ? <p className="subtitle">Archivo seleccionado: {importFile.name}</p> : null}
+              <button className="primary-button" disabled={!importFile} type="submit">
                 Importar Excel
               </button>
             </form>

@@ -18,6 +18,47 @@ import { logAudit } from "./auditService.js";
 const MAX_FAILED_ATTEMPTS = 6;
 const LOCK_MINUTES = 15;
 
+function isUserActive(user) {
+  if (typeof user?.active === "boolean") {
+    return user.active;
+  }
+
+  if (typeof user?.activo === "boolean") {
+    return user.activo;
+  }
+
+  return true;
+}
+
+function getStoredSecretHash(user) {
+  return user?.pin_hash ?? user?.password_hash ?? null;
+}
+
+async function getPublicTableColumns(db, tableName) {
+  const result = await db.query(
+    `
+      select column_name
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = $1
+    `,
+    [tableName],
+  );
+
+  return new Set(result.rows.map((row) => row.column_name));
+}
+
+function buildDynamicInsert(tableName, payload) {
+  const entries = Object.entries(payload);
+  const columns = entries.map(([column]) => column).join(", ");
+  const placeholders = entries.map((_, index) => `$${index + 1}`).join(", ");
+
+  return {
+    sql: `insert into ${tableName} (${columns}) values (${placeholders})`,
+    values: entries.map(([, value]) => value),
+  };
+}
+
 function publicUser(user) {
   return {
     id: user.id,
@@ -121,7 +162,7 @@ export async function login(payload, req, res) {
     throw new AppError(401, "Credenciales inválidas.");
   }
 
-  if (!user.active) {
+  if (!isUserActive(user)) {
     throw new AppError(403, "Usuario inactivo.");
   }
 
@@ -129,7 +170,7 @@ export async function login(payload, req, res) {
     throw new AppError(423, "Cuenta temporalmente bloqueada por seguridad.");
   }
 
-  const isValid = await compareSecret(secret, user.pin_hash);
+  const isValid = await compareSecret(secret, getStoredSecretHash(user));
 
   if (!isValid) {
     await registerFailedAttempt(user, ip, payload);
@@ -190,7 +231,7 @@ export async function changeOwnPin(user, payload, req) {
 
   const dbUserResult = await query("select * from users where id = $1", [user.id]);
   const dbUser = dbUserResult.rows[0];
-  const valid = await compareSecret(currentPin, dbUser.pin_hash);
+  const valid = await compareSecret(currentPin, getStoredSecretHash(dbUser));
 
   if (!valid) {
     throw new AppError(401, "PIN actual incorrecto.");
@@ -199,15 +240,28 @@ export async function changeOwnPin(user, payload, req) {
   const hashed = await hashSecret(newPin);
 
   await withTransaction(async (client) => {
+    const userColumns = await getPublicTableColumns(client, "users");
+    const updates = {
+      pin_hash: hashed,
+      must_change_password: false,
+    };
+
+    if (userColumns.has("password_hash")) {
+      updates.password_hash = hashed;
+    }
+
+    const setClause = Object.keys(updates)
+      .map((column, index) => `${column} = $${index + 2}`)
+      .join(", ");
+
     await client.query(
       `
         update users
         set
-          pin_hash = $2,
-          must_change_password = false
+          ${setClause}
         where id = $1
       `,
-      [user.id, hashed],
+      [user.id, ...Object.values(updates)],
     );
 
     await logAudit({
@@ -235,30 +289,69 @@ export async function createTreasurer({ actor, payload, req }) {
   const hash = await hashSecret(`${payload.password}`);
 
   return withTransaction(async (client) => {
-    const result = await client.query(
+    const userColumns = await getPublicTableColumns(client, "users");
+    const existing = await client.query(
       `
-        insert into users (
-          role,
-          username,
-          full_name,
-          phone,
-          pin_hash,
-          must_change_password,
-          active
-        )
-        values ('tesorero', $1, $2, $3, $4, false, true)
-        on conflict (username) do update
-        set
-          full_name = excluded.full_name,
-          phone = excluded.phone,
-          pin_hash = excluded.pin_hash,
-          active = true
-        returning id, role, username, full_name, phone, must_change_password
+        select id
+        from users
+        where lower(username) = $1
+          and role = 'tesorero'
+        limit 1
       `,
-      [username, payload.fullName.trim(), payload.phone?.trim() || null, hash],
+      [username],
     );
 
-    const created = result.rows[0];
+    const payloadFields = {
+      role: "tesorero",
+      username,
+      full_name: payload.fullName.trim(),
+      phone: payload.phone?.trim() || null,
+      pin_hash: hash,
+      must_change_password: false,
+    };
+
+    if (userColumns.has("password_hash")) {
+      payloadFields.password_hash = hash;
+    }
+
+    if (userColumns.has("active")) {
+      payloadFields.active = true;
+    }
+
+    if (userColumns.has("activo")) {
+      payloadFields.activo = true;
+    }
+
+    let created;
+
+    if (existing.rowCount > 0) {
+      const mutableFields = { ...payloadFields };
+      delete mutableFields.role;
+      delete mutableFields.username;
+
+      const updates = Object.keys(mutableFields)
+        .map((column, index) => `${column} = $${index + 2}`)
+        .join(", ");
+
+      const result = await client.query(
+        `
+          update users
+          set
+            ${updates}
+          where id = $1
+          returning id, role, username, full_name, phone, must_change_password
+        `,
+        [existing.rows[0].id, ...Object.values(mutableFields)],
+      );
+      created = result.rows[0];
+    } else {
+      const insert = buildDynamicInsert("users", payloadFields);
+      const result = await client.query(
+        `${insert.sql} returning id, role, username, full_name, phone, must_change_password`,
+        insert.values,
+      );
+      created = result.rows[0];
+    }
 
     await logAudit({
       userId: actor.id,
@@ -303,17 +396,30 @@ export async function resetNeighborPin({ actor, payload, req }) {
   const hashed = await hashSecret(temporaryPin);
 
   await withTransaction(async (client) => {
+    const userColumns = await getPublicTableColumns(client, "users");
+    const updates = {
+      pin_hash: hashed,
+      must_change_password: true,
+      failed_login_attempts: 0,
+      locked_until: null,
+    };
+
+    if (userColumns.has("password_hash")) {
+      updates.password_hash = hashed;
+    }
+
+    const setClause = Object.keys(updates)
+      .map((column, index) => `${column} = $${index + 2}`)
+      .join(", ");
+
     await client.query(
       `
         update users
         set
-          pin_hash = $2,
-          must_change_password = true,
-          failed_login_attempts = 0,
-          locked_until = null
+          ${setClause}
         where id = $1
       `,
-      [vecinoUser.id, hashed],
+      [vecinoUser.id, ...Object.values(updates)],
     );
 
     await logAudit({

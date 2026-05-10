@@ -116,6 +116,9 @@ export function LoginPage() {
                   required
                 />
               </label>
+              <p className="subtitle">
+                PIN inicial: últimos 4 dígitos del teléfono registrado en la comunidad.
+              </p>
             </>
           ) : (
             <>
@@ -165,4 +168,3 @@ export function LoginPage() {
     </main>
   );
 }
-

@@ -89,10 +89,10 @@ export async function getNeighborPortal(user) {
     buildVecinoFinancialSummary(vecino, totalsMap, configs),
   );
   const community = buildCommunityComparison(communityFinancials);
-
-  const relativeDifference = roundQuotas(
-    ledger.summary.progressPercentage - community.porcentajeAvance,
+  const sameStreetFinancials = communityFinancials.filter(
+    (item) => item.pasaje === ledger.summary.pasaje,
   );
+  const streetCommunity = buildCommunityComparison(sameStreetFinancials);
 
   let message = "Vas avanzando. Aún tienes pagos pendientes.";
 
@@ -107,14 +107,14 @@ export async function getNeighborPortal(user) {
   return {
     ...ledger,
     comparison: {
-      porcentajeVecinosAlDia:
-        community.totalDirecciones === 0
-          ? 0
-          : roundQuotas((community.vecinosAlDia / community.totalDirecciones) * 100),
-      promedioComunidad: community.porcentajeAvance,
-      avanceRelativo: relativeDifference,
+      comunidadAlDia: community.vecinosAlDia,
+      comunidadTotal: community.totalDirecciones,
+      pasaje: ledger.summary.pasaje,
+      pasajeAlDia: streetCommunity.vecinosAlDia,
+      pasajeTotal: streetCommunity.totalDirecciones,
+      resumenPortones: `${roundQuotas(ledger.summary.concepts.PORTONES.equivalentQuotas)} de ${ledger.summary.concepts.PORTONES.totalQuotas}`,
+      resumenMantencion: `${roundQuotas(ledger.summary.concepts.MANTENCION.equivalentQuotas)} de ${ledger.summary.concepts.MANTENCION.totalQuotas}`,
       message,
     },
   };
 }
-

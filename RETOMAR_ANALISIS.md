@@ -71,6 +71,39 @@ Regla de continuidad:
 - Login `admin` y `tesorero` ya fueron validados vía API.
 - El panel admin quedó operativo y el sistema ya está precargado con el Excel base.
 
+## Ajustes UI y compatibilidad 2026-05-09
+- Objetivo:
+  - separar el flujo de tesorería del mapa
+  - hacer el panel vecino más simple de entender
+  - corregir compatibilidades heredadas que seguían afectando login vecino y creación manual de pagos
+- Cambios aplicados en código:
+  - `TreasurerDashboardPage` ahora usa 2 pestañas:
+    - `Resumen y pagos`
+    - `Mapa comunitario`
+  - el mapa deja de compartir pantalla con el formulario del tesorero
+  - `NeighborDashboardPage` ahora muestra cuotas pagadas como:
+    - `X de Y`
+    - para `Portones 2026`
+    - para `Mantención 2026`
+  - `Contexto anónimo` dejó de usar porcentajes y ahora muestra:
+    - vecinos al día en toda la comunidad
+    - vecinos al día en el pasaje del vecino
+  - `MapView` se acercó visualmente al HTML de referencia:
+    - fondo más neutro
+    - tiles OSM atenuados
+    - marcadores más legibles para etiquetas como `12/12`
+    - refresco de tamaño al activarse una pestaña para evitar render malo al hacer zoom
+- Compatibilidad backend agregada:
+  - `paymentService` ahora llena `tipo_pago` legacy cuando la tabla productiva lo exige
+  - `authService` ahora tolera registros heredados con `pin_hash` o `password_hash`
+  - `authService` y `middleware/auth` ahora aceptan `active` o `activo`
+  - la importación Excel vuelve a sembrar credenciales iniciales para vecinos que todavía siguen con `must_change_password = true`
+- Resultado esperado después de publicar:
+  - el tesorero puede registrar pagos sin error por `tipo_pago`
+  - el login vecino queda más robusto frente a registros heredados
+  - el mapa dentro de tabs se debería renderizar correctamente
+  - la lectura del panel vecino queda más clara para usuarios no técnicos
+
 ## Importación Excel 2026-05-08
 - Objetivo:
   - usar `Direcciones BD.xlsx` para precargar la base real del sistema
@@ -246,5 +279,5 @@ Si se rotan credenciales:
 - actualizar este archivo
 
 ## Última actualización
-- Fecha: 2026-05-08
-- Estado: producción operativa con login admin validado, panel admin funcional e importación inicial desde `Direcciones BD.xlsx` completada con `92` vecinos y `120` pagos
+- Fecha: 2026-05-09
+- Estado: código listo con ajuste de tabs para tesorero, panel vecino simplificado, mapa estabilizado en tabs y compatibilidad backend reforzada para pagos/login; pendiente publicación de estos cambios

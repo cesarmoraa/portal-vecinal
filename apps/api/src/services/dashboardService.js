@@ -160,6 +160,7 @@ export function buildStreetSummary(financials) {
         totalMantencionQuotas: 0,
         totalRecaudado: 0,
         totalAvance: 0,
+        vecinosAlDia: 0,
       });
     }
 
@@ -171,6 +172,8 @@ export function buildStreetSummary(financials) {
     bucket.totalMantencionQuotas += item.concepts.MANTENCION.equivalentQuotas;
     bucket.totalRecaudado += item.totalCollected;
     bucket.totalAvance += item.progressPercentage;
+    bucket.vecinosAlDia +=
+      item.generalStatus === "Al día" || item.generalStatus === "Adelantado" ? 1 : 0;
   }
 
   return Array.from(grouped.values())
@@ -183,6 +186,7 @@ export function buildStreetSummary(financials) {
       promedioCuotasMantencion: roundQuotas(item.totalMantencionQuotas / item.totalDirecciones),
       totalRecaudado: roundCurrency(item.totalRecaudado),
       porcentajeAvance: roundQuotas(item.totalAvance / item.totalDirecciones),
+      vecinosAlDia: item.vecinosAlDia,
     }))
     .sort((a, b) => a.pasaje.localeCompare(b.pasaje, "es"));
 }

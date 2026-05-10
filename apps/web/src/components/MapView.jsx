@@ -1,20 +1,41 @@
 import { divIcon } from "leaflet";
 import { useEffect } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
-import { formatCurrency, formatPercent, formatQuotas } from "../lib/formatters.js";
+import { formatCurrency, formatQuotas } from "../lib/formatters.js";
 import { StatusBadge } from "./StatusBadge.jsx";
 
-function FitBounds({ markers }) {
+function FitBounds({ markers, active }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!markers.length) {
+    if (!active || !markers.length) {
       return;
     }
 
     const bounds = markers.map((marker) => [marker.latitud, marker.longitud]);
-    map.fitBounds(bounds, { padding: [36, 36] });
-  }, [map, markers]);
+    map.fitBounds(bounds, {
+      padding: [72, 72],
+      maxZoom: 20,
+    });
+  }, [active, map, markers]);
+
+  return null;
+}
+
+function SyncMapSize({ active }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      map.invalidateSize({ pan: false });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [active, map]);
 
   return null;
 }
@@ -31,22 +52,31 @@ function createMarkerIcon(marker) {
             ? "map-marker-gray"
             : "map-marker-red";
 
+  const width = Math.max(58, marker.markerLabel.length * 12 + 18);
+
   return divIcon({
     className: "custom-marker-wrapper",
     html: `<div class="map-marker ${statusClass}">${marker.markerLabel}</div>`,
-    iconSize: [54, 30],
-    iconAnchor: [27, 15],
+    iconSize: [width, 34],
+    iconAnchor: [width / 2, 17],
   });
 }
 
-export function MapView({ markers, streetSummary, paymentState }) {
+function quotaProgressText(concept) {
+  return `${formatQuotas(concept.equivalentQuotas)} de ${formatQuotas(concept.totalQuotas)}`;
+}
+
+export function MapView({ markers, streetSummary, paymentState, active = true }) {
   return (
     <section className="map-stage">
       <MapContainer
         center={[-33.477, -70.732]}
-        zoom={18}
+        zoom={18.5}
         minZoom={17}
-        maxZoom={21}
+        maxZoom={22}
+        zoomSnap={0.25}
+        zoomDelta={0.5}
+        markerZoomAnimation={false}
         scrollWheelZoom
         className="map-canvas"
       >
@@ -80,15 +110,11 @@ export function MapView({ markers, streetSummary, paymentState }) {
                   </div>
                   <div>
                     <dt>Portones</dt>
-                    <dd>
-                      {formatQuotas(marker.popup.portones.equivalentQuotas)} cuotas equivalentes
-                    </dd>
+                    <dd>{quotaProgressText(marker.popup.portones)} cuotas</dd>
                   </div>
                   <div>
                     <dt>Mantención</dt>
-                    <dd>
-                      {formatQuotas(marker.popup.mantencion.equivalentQuotas)} cuotas equivalentes
-                    </dd>
+                    <dd>{quotaProgressText(marker.popup.mantencion)} cuotas</dd>
                   </div>
                   <div>
                     <dt>Saldo pendiente</dt>
@@ -104,7 +130,8 @@ export function MapView({ markers, streetSummary, paymentState }) {
           </Marker>
         ))}
 
-        <FitBounds markers={markers} />
+        <FitBounds active={active} markers={markers} />
+        <SyncMapSize active={active} />
       </MapContainer>
 
       <aside className="floating-card floating-top-right">
@@ -123,10 +150,10 @@ export function MapView({ markers, streetSummary, paymentState }) {
               <div className="street-metrics">
                 <span>Firmas SI: {street.firmasSi}</span>
                 <span>Firmas NO: {street.firmasNo}</span>
+                <span>Al día: {street.vecinosAlDia} / {street.totalDirecciones}</span>
                 <span>P: {formatQuotas(street.promedioCuotasPortones)}</span>
                 <span>M: {formatQuotas(street.promedioCuotasMantencion)}</span>
                 <span>{formatCurrency(street.totalRecaudado)}</span>
-                <span>{formatPercent(street.porcentajeAvance)}</span>
               </div>
             </article>
           ))}
@@ -154,7 +181,7 @@ export function MapView({ markers, streetSummary, paymentState }) {
           </div>
           <div>
             <span>Vecinos al día</span>
-            <strong>{paymentState.vecinosAlDia}</strong>
+            <strong>{paymentState.vecinosAlDia} de {paymentState.totalDirecciones}</strong>
           </div>
           <div>
             <span>Vecinos atrasados</span>
@@ -165,12 +192,11 @@ export function MapView({ markers, streetSummary, paymentState }) {
             <strong>{paymentState.vecinosSinFirma}</strong>
           </div>
           <div>
-            <span>% avance</span>
-            <strong>{formatPercent(paymentState.porcentajeAvance)}</strong>
+            <span>Firmas registradas</span>
+            <strong>{paymentState.totalDirecciones - paymentState.vecinosSinFirma} de {paymentState.totalDirecciones}</strong>
           </div>
         </div>
       </aside>
     </section>
   );
 }
-

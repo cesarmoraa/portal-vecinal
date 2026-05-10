@@ -391,7 +391,7 @@ export async function importWorkbookToDatabase({
 
       const userExists = await client.query(
         `
-          select id
+          select id, must_change_password
           from users
           where role = 'vecino'
             and pasaje = $1
@@ -409,6 +409,35 @@ export async function importWorkbookToDatabase({
         await createVecinoUser(client, initialPin, vecinoId, userColumns);
       } else {
         await updateVecinoUser(client, vecino, vecinoId, userColumns);
+
+        if (userExists.rows[0].must_change_password) {
+          const seededHash = await hashSecret(last4Digits(vecino.telefono));
+          const secretFields = {};
+
+          if (userColumns.has("pin_hash")) {
+            secretFields.pin_hash = seededHash;
+          }
+
+          if (userColumns.has("password_hash")) {
+            secretFields.password_hash = seededHash;
+          }
+
+          if (Object.keys(secretFields).length > 0) {
+            const updates = Object.keys(secretFields)
+              .map((column, index) => `${column} = $${index + 2}`)
+              .join(", ");
+
+            await client.query(
+              `
+                update users
+                set
+                  ${updates}
+                where id = $1
+              `,
+              [userExists.rows[0].id, ...Object.values(secretFields)],
+            );
+          }
+        }
       }
     }
 

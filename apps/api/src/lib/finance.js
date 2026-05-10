@@ -35,6 +35,8 @@ export function computeConceptProgress(totalPaid, config, today = new Date()) {
     return {
       concepto: null,
       totalPaid: 0,
+      totalQuotas: 0,
+      valorCuota: 0,
       equivalentQuotas: 0,
       expectedQuotas: 0,
       totalProgrammed: 0,
@@ -47,6 +49,7 @@ export function computeConceptProgress(totalPaid, config, today = new Date()) {
 
   const paid = roundCurrency(totalPaid);
   const valueQuota = Number(config.valor_cuota);
+  const totalQuotas = Number(config.cuotas_totales);
   const totalProgrammed = roundCurrency(Number(config.cuotas_totales) * valueQuota);
   const expectedQuotas = getExpectedQuotaCount(config, today);
   const expectedAmount = roundCurrency(expectedQuotas * valueQuota);
@@ -69,6 +72,8 @@ export function computeConceptProgress(totalPaid, config, today = new Date()) {
   return {
     concepto: config.concepto,
     totalPaid: paid,
+    totalQuotas,
+    valorCuota: valueQuota,
     equivalentQuotas,
     expectedQuotas,
     totalProgrammed,
@@ -108,4 +113,3 @@ export function formatMarkerLabel(portones, mantencion) {
   const right = Number.isInteger(mantencion) ? `${mantencion}` : mantencion.toFixed(1);
   return `${left}/${right}`;
 }
-

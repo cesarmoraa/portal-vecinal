@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { LayoutShell } from "../components/LayoutShell.jsx";
 import { StatusBadge } from "../components/StatusBadge.jsx";
 import { apiRequest } from "../lib/api.js";
-import { formatCurrency, formatDate, formatPercent, formatQuotas } from "../lib/formatters.js";
+import { formatCurrency, formatDate, formatQuotas } from "../lib/formatters.js";
+
+function quotaCountText(concept) {
+  return `${formatQuotas(concept.equivalentQuotas)} de ${formatQuotas(concept.totalQuotas)}`;
+}
 
 export function NeighborDashboardPage() {
   const [data, setData] = useState(null);
@@ -25,7 +29,7 @@ export function NeighborDashboardPage() {
   return (
     <LayoutShell
       title="Panel vecino"
-      subtitle="Tu estado financiero, detalle de pagos y comparativo anónimo con la comunidad."
+      subtitle="Tu estado financiero 2026, tus cuotas pagadas y un contexto anónimo fácil de entender."
     >
       <main className="neighbor-layout">
         <section className="glass-card">
@@ -46,8 +50,8 @@ export function NeighborDashboardPage() {
                 <strong>{formatCurrency(data.summary.totalPending)}</strong>
               </div>
               <div>
-                <span>Avance</span>
-                <strong>{formatPercent(data.summary.progressPercentage)}</strong>
+                <span>Marcador</span>
+                <strong>{data.summary.markerLabel}</strong>
               </div>
             </div>
           </div>
@@ -68,8 +72,8 @@ export function NeighborDashboardPage() {
                 </div>
                 <div className="summary-grid">
                   <div>
-                    <span>Cuotas equivalentes</span>
-                    <strong>{formatQuotas(data.summary.concepts[concept].equivalentQuotas)}</strong>
+                    <span>Cuotas pagadas 2026</span>
+                    <strong>{quotaCountText(data.summary.concepts[concept])}</strong>
                   </div>
                   <div>
                     <span>Saldo</span>
@@ -80,8 +84,8 @@ export function NeighborDashboardPage() {
                     <strong>{formatCurrency(data.summary.concepts[concept].totalPaid)}</strong>
                   </div>
                   <div>
-                    <span>Avance</span>
-                    <strong>{formatPercent(data.summary.concepts[concept].progressPercentage)}</strong>
+                    <span>Cuotas esperadas hoy</span>
+                    <strong>{formatQuotas(data.summary.concepts[concept].expectedQuotas)}</strong>
                   </div>
                 </div>
               </div>
@@ -96,16 +100,20 @@ export function NeighborDashboardPage() {
 
             <div className="summary-grid">
               <div>
-                <span>% vecinos al día</span>
-                <strong>{formatPercent(data.comparison.porcentajeVecinosAlDia)}</strong>
+                <span>Vecinos al día en la comunidad</span>
+                <strong>{data.comparison.comunidadAlDia} / {data.comparison.comunidadTotal}</strong>
               </div>
               <div>
-                <span>Promedio comunidad</span>
-                <strong>{formatPercent(data.comparison.promedioComunidad)}</strong>
+                <span>Vecinos al día en {data.comparison.pasaje}</span>
+                <strong>{data.comparison.pasajeAlDia} / {data.comparison.pasajeTotal}</strong>
               </div>
               <div>
-                <span>Avance relativo</span>
-                <strong>{formatPercent(data.comparison.avanceRelativo)}</strong>
+                <span>Portones 2026</span>
+                <strong>{data.comparison.resumenPortones}</strong>
+              </div>
+              <div>
+                <span>Mantención 2026</span>
+                <strong>{data.comparison.resumenMantencion}</strong>
               </div>
             </div>
 
@@ -148,4 +156,3 @@ export function NeighborDashboardPage() {
     </LayoutShell>
   );
 }
-

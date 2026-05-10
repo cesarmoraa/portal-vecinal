@@ -25,6 +25,7 @@ export async function requireAuth(req, _res, next) {
           u.phone,
           u.must_change_password,
           u.active,
+          u.activo,
           v.representante_nombre,
           v.telefono
         from users u
@@ -36,7 +37,14 @@ export async function requireAuth(req, _res, next) {
 
     const user = result.rows[0];
 
-    if (!user || !user.active) {
+    const isActive =
+      typeof user?.active === "boolean"
+        ? user.active
+        : typeof user?.activo === "boolean"
+          ? user.activo
+          : true;
+
+    if (!user || !isActive) {
       throw new AppError(401, "Usuario inactivo o no encontrado.");
     }
 
