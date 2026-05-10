@@ -152,6 +152,50 @@ async function registerFailedAttempt(user, ip, payload) {
   });
 }
 
+async function tryNeighborBootstrapLogin(user, secret) {
+  if (user.role !== "vecino" || !user.must_change_password) {
+    return false;
+  }
+
+  const expectedPin = last4Digits(user.phone);
+
+  if (!expectedPin || secret !== expectedPin) {
+    return false;
+  }
+
+  const hashed = await hashSecret(secret);
+  const userColumns = await getPublicTableColumns({ query }, "users");
+  const updates = {
+    pin_hash: hashed,
+  };
+
+  if (userColumns.has("password_hash")) {
+    updates.password_hash = hashed;
+  }
+
+  const setClause = Object.keys(updates)
+    .map((column, index) => `${column} = $${index + 2}`)
+    .join(", ");
+
+  await query(
+    `
+      update users
+      set
+        ${setClause}
+      where id = $1
+    `,
+    [user.id, ...Object.values(updates)],
+  );
+
+  user.pin_hash = hashed;
+
+  if (userColumns.has("password_hash")) {
+    user.password_hash = hashed;
+  }
+
+  return true;
+}
+
 export async function login(payload, req, res) {
   const ip = extractIp(req);
   const user = await loadLoginUser(payload);
@@ -170,7 +214,15 @@ export async function login(payload, req, res) {
     throw new AppError(423, "Cuenta temporalmente bloqueada por seguridad.");
   }
 
-  const isValid = await compareSecret(secret, getStoredSecretHash(user));
+  let isValid = await compareSecret(secret, getStoredSecretHash(user));
+
+  if (!isValid) {
+    const bootstrapped = await tryNeighborBootstrapLogin(user, secret);
+
+    if (bootstrapped) {
+      isValid = true;
+    }
+  }
 
   if (!isValid) {
     await registerFailedAttempt(user, ip, payload);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LayoutShell } from "../components/LayoutShell.jsx";
 import { MapView } from "../components/MapView.jsx";
 import { StatusBadge } from "../components/StatusBadge.jsx";
@@ -74,9 +74,9 @@ function PaymentEditor({
 
   if (!selectedVecino) {
     return (
-      <article className="glass-card side-card">
+      <article className="glass-card side-card form-card-compact">
         <div className="card-heading">
-          <p className="eyebrow">Formulario tesorero</p>
+          <p className="eyebrow">Registro de pagos</p>
           <h2>Selecciona una dirección</h2>
         </div>
         <p className="subtitle">
@@ -87,9 +87,9 @@ function PaymentEditor({
   }
 
   return (
-    <article className="glass-card side-card">
+    <article className="glass-card side-card form-card-compact">
       <div className="card-heading">
-        <p className="eyebrow">Formulario tesorero</p>
+        <p className="eyebrow">Registro de pagos</p>
         <h2>{selectedVecino.direccion}</h2>
       </div>
 
@@ -168,18 +168,10 @@ function TreasurerSummaryCards({ paymentState }) {
         <h2>Estado comunidad 2026</h2>
       </div>
 
-      <div className="summary-grid">
+      <div className="summary-grid compact">
         <div>
           <span>Total direcciones</span>
           <strong>{paymentState.totalDirecciones}</strong>
-        </div>
-        <div>
-          <span>Vecinos al día</span>
-          <strong>{paymentState.vecinosAlDia} de {paymentState.totalDirecciones}</strong>
-        </div>
-        <div>
-          <span>Vecinos atrasados</span>
-          <strong>{paymentState.vecinosAtrasados}</strong>
         </div>
         <div>
           <span>Sin firma</span>
@@ -193,6 +185,61 @@ function TreasurerSummaryCards({ paymentState }) {
           <span>Recaudado mantención</span>
           <strong>{formatCurrency(paymentState.totalRecaudadoMantencion)}</strong>
         </div>
+      </div>
+
+      <div className="executive-rows">
+        {[
+          ["Portones", paymentState.conceptos.PORTONES],
+          ["Mantención", paymentState.conceptos.MANTENCION],
+        ].map(([label, counts]) => (
+          <div className="executive-row" key={label}>
+            <strong>{label}</strong>
+            <span>
+              Vecinos al día
+              <b>{counts.alDia}</b>
+            </span>
+            <span>
+              Vecinos atrasados
+              <b>{counts.atrasados}</b>
+            </span>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function StreetExecutiveSummary({ streetSummary }) {
+  return (
+    <article className="glass-card side-card">
+      <div className="card-heading">
+        <p className="eyebrow">Resumen por pasaje</p>
+        <h2>Lectura rápida</h2>
+      </div>
+
+      <div className="street-executive-list">
+        {streetSummary.map((street) => (
+          <div className="street-executive-row" key={street.pasaje}>
+            <div>
+              <strong>{street.pasaje}</strong>
+              <span>{street.totalDirecciones} direcciones</span>
+            </div>
+            <div className="street-executive-metrics">
+              <span>
+                Al día
+                <b>{street.vecinosAlDia}</b>
+              </span>
+              <span>
+                Atrasados
+                <b>{street.vecinosAtrasados}</b>
+              </span>
+              <span>
+                Sin firma
+                <b>{street.firmasNo}</b>
+              </span>
+            </div>
+          </div>
+        ))}
       </div>
     </article>
   );
@@ -285,6 +332,86 @@ function LedgerTable({ ledger, onEdit }) {
         </table>
       </div>
     </article>
+  );
+}
+
+function OverviewTable({ financials }) {
+  const [filter, setFilter] = useState("");
+
+  const rows = useMemo(() => {
+    const term = filter.trim().toUpperCase();
+
+    return financials.filter((item) => {
+      if (!term) {
+        return true;
+      }
+
+      return (
+        item.direccion.toUpperCase().includes(term)
+        || item.pasaje.toUpperCase().includes(term)
+        || `${item.numeracion}`.includes(term)
+        || `${item.representanteNombre ?? ""}`.toUpperCase().includes(term)
+      );
+    });
+  }, [filter, financials]);
+
+  return (
+    <section className="stack-form">
+      <article className="glass-card side-card">
+        <div className="card-heading">
+          <p className="eyebrow">Vista general</p>
+          <h2>Direcciones y estados financieros</h2>
+        </div>
+
+        <input
+          className="search-input"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="Filtrar por pasaje, dirección o representante"
+        />
+
+        <div className="table-wrap executive-table-wrap">
+          <table className="data-table executive-table">
+            <thead>
+              <tr>
+                <th>Dirección</th>
+                <th>Representante</th>
+                <th>Firma</th>
+                <th>Estado</th>
+                <th>Portones 2026</th>
+                <th>Mantención 2026</th>
+                <th>Total abonado</th>
+                <th>Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((item) => (
+                <tr key={item.vecinoId}>
+                  <td>
+                    <strong>{item.direccion}</strong>
+                    <div className="muted-cell">{item.pasaje}</div>
+                  </td>
+                  <td>
+                    <strong>{item.representanteNombre || "Sin representante"}</strong>
+                    <div className="muted-cell">{item.telefono || "Sin teléfono"}</div>
+                  </td>
+                  <td>{item.firmaVobo ? "Sí" : "No"}</td>
+                  <td><StatusBadge value={item.generalStatus} /></td>
+                  <td>
+                    {formatQuotas(item.concepts.PORTONES.equivalentQuotas)} de {formatQuotas(item.concepts.PORTONES.totalQuotas)}
+                  </td>
+                  <td>
+                    {formatQuotas(item.concepts.MANTENCION.equivalentQuotas)} de {formatQuotas(item.concepts.MANTENCION.totalQuotas)}
+                  </td>
+                  <td>{formatCurrency(item.totalCollected)}</td>
+                  <td>{formatCurrency(item.totalPending)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
   );
 }
 
@@ -381,12 +508,20 @@ export function TreasurerDashboardPage() {
           >
             Mapa comunitario
           </button>
+          <button
+            className={activeTab === "vista" ? "section-tab active" : "section-tab"}
+            onClick={() => setActiveTab("vista")}
+            type="button"
+          >
+            Vista general
+          </button>
         </section>
 
         {activeTab === "resumen" ? (
           <section className="treasurer-workbench">
             <div className="operations-sidebar">
               <TreasurerSummaryCards paymentState={overview.paymentState} />
+              <StreetExecutiveSummary streetSummary={overview.streetSummary} />
 
               <article className="glass-card side-card">
                 <div className="card-heading">
@@ -418,8 +553,6 @@ export function TreasurerDashboardPage() {
                   ))}
                 </div>
               </article>
-
-              <SelectedNeighborSummary ledger={ledger} />
             </div>
 
             <div className="operations-sidebar">
@@ -433,20 +566,28 @@ export function TreasurerDashboardPage() {
                 }}
               />
 
+              <SelectedNeighborSummary ledger={ledger} />
+
               <LedgerTable
                 ledger={ledger}
                 onEdit={(payment) => setSelectedPayment(payment)}
               />
             </div>
           </section>
-        ) : (
+        ) : null}
+
+        {activeTab === "mapa" ? (
           <MapView
             active={activeTab === "mapa"}
             markers={overview.markers}
             streetSummary={overview.streetSummary}
             paymentState={overview.paymentState}
           />
-        )}
+        ) : null}
+
+        {activeTab === "vista" ? (
+          <OverviewTable financials={overview.financials} />
+        ) : null}
       </main>
     </LayoutShell>
   );

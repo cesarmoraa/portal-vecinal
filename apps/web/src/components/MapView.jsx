@@ -148,12 +148,9 @@ export function MapView({ markers, streetSummary, paymentState, active = true })
                 <span>{street.totalDirecciones} direcciones</span>
               </div>
               <div className="street-metrics">
-                <span>Firmas SI: {street.firmasSi}</span>
-                <span>Firmas NO: {street.firmasNo}</span>
-                <span>Al día: {street.vecinosAlDia} / {street.totalDirecciones}</span>
-                <span>P: {formatQuotas(street.promedioCuotasPortones)}</span>
-                <span>M: {formatQuotas(street.promedioCuotasMantencion)}</span>
-                <span>{formatCurrency(street.totalRecaudado)}</span>
+                <span>Al día: {street.vecinosAlDia}</span>
+                <span>Atrasados: {street.vecinosAtrasados}</span>
+                <span>Sin firma: {street.firmasNo}</span>
               </div>
             </article>
           ))}

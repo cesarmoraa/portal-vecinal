@@ -8,6 +8,30 @@ import {
 } from "../lib/finance.js";
 import { normalizeConcept } from "../lib/normalizers.js";
 
+function isUpToDateStatus(status) {
+  return status === "Al día" || status === "Adelantado";
+}
+
+function countConceptStatuses(financials, conceptKey) {
+  return financials.reduce(
+    (acc, item) => {
+      const status = item.concepts[conceptKey].status;
+
+      if (isUpToDateStatus(status)) {
+        acc.alDia += 1;
+      } else {
+        acc.atrasados += 1;
+      }
+
+      return acc;
+    },
+    {
+      alDia: 0,
+      atrasados: 0,
+    },
+  );
+}
+
 export async function fetchConfigs(db = { query }) {
   const result = await db.query(
     `
@@ -141,6 +165,10 @@ export function buildCommunityComparison(financials) {
     vecinosAtrasados: delayed,
     vecinosSinFirma: withoutSignature,
     porcentajeAvance: avgAdvance,
+    conceptos: {
+      PORTONES: countConceptStatuses(financials, "PORTONES"),
+      MANTENCION: countConceptStatuses(financials, "MANTENCION"),
+    },
   };
 }
 
@@ -161,6 +189,17 @@ export function buildStreetSummary(financials) {
         totalRecaudado: 0,
         totalAvance: 0,
         vecinosAlDia: 0,
+        vecinosAtrasados: 0,
+        conceptos: {
+          PORTONES: {
+            alDia: 0,
+            atrasados: 0,
+          },
+          MANTENCION: {
+            alDia: 0,
+            atrasados: 0,
+          },
+        },
       });
     }
 
@@ -174,6 +213,10 @@ export function buildStreetSummary(financials) {
     bucket.totalAvance += item.progressPercentage;
     bucket.vecinosAlDia +=
       item.generalStatus === "Al día" || item.generalStatus === "Adelantado" ? 1 : 0;
+    bucket.vecinosAtrasados +=
+      item.generalStatus === "Atrasado" || item.generalStatus === "Parcial" ? 1 : 0;
+    bucket.conceptos.PORTONES[item.concepts.PORTONES.status === "Al día" || item.concepts.PORTONES.status === "Adelantado" ? "alDia" : "atrasados"] += 1;
+    bucket.conceptos.MANTENCION[item.concepts.MANTENCION.status === "Al día" || item.concepts.MANTENCION.status === "Adelantado" ? "alDia" : "atrasados"] += 1;
   }
 
   return Array.from(grouped.values())
@@ -187,6 +230,8 @@ export function buildStreetSummary(financials) {
       totalRecaudado: roundCurrency(item.totalRecaudado),
       porcentajeAvance: roundQuotas(item.totalAvance / item.totalDirecciones),
       vecinosAlDia: item.vecinosAlDia,
+      vecinosAtrasados: item.vecinosAtrasados,
+      conceptos: item.conceptos,
     }))
     .sort((a, b) => a.pasaje.localeCompare(b.pasaje, "es"));
 }

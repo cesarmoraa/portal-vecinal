@@ -104,6 +104,42 @@ Regla de continuidad:
   - el mapa dentro de tabs se debería renderizar correctamente
   - la lectura del panel vecino queda más clara para usuarios no técnicos
 
+### Segunda iteración UX tesorero 2026-05-09
+- Ajustes solicitados después de revisar pantallas reales:
+  - cambiar `Formulario tesorero` por `Registro de pagos`
+  - reducir sensación de bloque demasiado ancho
+  - `Resumen de pagos` debe leer estado por concepto y no solo global
+  - agregar una tercera pestaña con vista ejecutiva por dirección
+- Cambios aplicados:
+  - `TreasurerDashboardPage` ahora tiene 3 pestañas:
+    - `Resumen y pagos`
+    - `Mapa comunitario`
+    - `Vista general`
+  - `Resumen de pagos` ahora muestra por filas:
+    - `Portones`: vecinos al día / vecinos atrasados
+    - `Mantención`: vecinos al día / vecinos atrasados
+  - se agregó `StreetExecutiveSummary` con una fila por pasaje:
+    - vecinos al día
+    - vecinos atrasados
+    - sin firma
+  - se agregó `OverviewTable`:
+    - dirección
+    - representante
+    - firma
+    - estado general
+    - portones `X de Y`
+    - mantención `X de Y`
+    - total abonado
+    - saldo
+  - el login vecino ahora intenta autorreparar el hash inicial cuando:
+    - el usuario es `vecino`
+    - sigue con `must_change_password = true`
+    - el PIN ingresado coincide con los últimos 4 dígitos del teléfono
+- Resultado esperado:
+  - mejor lectura ejecutiva para tesorería
+  - menos confusión con el ancho del formulario
+  - más tolerancia para vecinos con credenciales iniciales heredadas
+
 ## Importación Excel 2026-05-08
 - Objetivo:
   - usar `Direcciones BD.xlsx` para precargar la base real del sistema
@@ -280,4 +316,4 @@ Si se rotan credenciales:
 
 ## Última actualización
 - Fecha: 2026-05-09
-- Estado: código listo con ajuste de tabs para tesorero, panel vecino simplificado, mapa estabilizado en tabs y compatibilidad backend reforzada para pagos/login; pendiente publicación de estos cambios
+- Estado: código listo con 3 tabs en tesorería, resumen ejecutivo por concepto/pasaje, vista general por dirección y autorreparación de PIN inicial para vecinos; pendiente publicación de esta segunda iteración
