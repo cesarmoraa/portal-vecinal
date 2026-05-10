@@ -437,6 +437,48 @@ export async function buildExportWorkbook({ financials, paymentsByVecino, year }
   return Buffer.from(buffer);
 }
 
+export async function buildExecutiveOverviewWorkbook({ financials, year }) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Codex";
+  workbook.created = new Date();
+
+  const sheet = workbook.addWorksheet(`Vista general ${year}`);
+
+  addHeaderRow(sheet, [
+    "Direccion",
+    "Nombre",
+    "Pasaje",
+    "Firma VºBº",
+    "Cuota Portones",
+    "Cuota Mantención",
+  ]);
+
+  for (const item of financials) {
+    sheet.addRow([
+      `${item.pasaje} ${item.numeracion}`,
+      item.representanteNombre || "Sin representante",
+      item.pasaje,
+      item.firmaVobo ? "SI" : "NO",
+      `${item.concepts.PORTONES.equivalentQuotas} de ${item.concepts.PORTONES.totalQuotas}`,
+      `${item.concepts.MANTENCION.equivalentQuotas} de ${item.concepts.MANTENCION.totalQuotas}`,
+    ]);
+  }
+
+  sheet.columns = [
+    { key: "direccion", width: 26 },
+    { key: "nombre", width: 34 },
+    { key: "pasaje", width: 24 },
+    { key: "firma", width: 14 },
+    { key: "portones", width: 18 },
+    { key: "mantencion", width: 20 },
+  ];
+
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
+
 export function buildInitialNeighborUser(vecino, hash) {
   return {
     role: "vecino",

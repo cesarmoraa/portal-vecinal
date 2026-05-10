@@ -2,7 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { query, withTransaction } from "../db/pool.js";
 import { AppError } from "../lib/appError.js";
-import { buildExportWorkbook, buildInitialNeighborUser, groupPaymentsByVecino, parseExcelWorkbook } from "../lib/excel.js";
+import {
+  buildExecutiveOverviewWorkbook,
+  buildExportWorkbook,
+  buildInitialNeighborUser,
+  groupPaymentsByVecino,
+  parseExcelWorkbook,
+} from "../lib/excel.js";
 import { last4Digits, normalizeConcept, normalizePasaje } from "../lib/normalizers.js";
 import { hashSecret } from "../lib/security.js";
 import { logAudit } from "./auditService.js";
@@ -571,6 +577,34 @@ export async function exportDatabaseToWorkbook({ actor, req, year, outputPath = 
       entity: "excel",
       entityId: `${year}`,
       metadata: { outputPath },
+    });
+  }
+
+  return buffer;
+}
+
+export async function exportExecutiveOverviewWorkbook({ actor, req, year }) {
+  const [vecinos, configs, totalsMap] = await Promise.all([
+    fetchVecinos(),
+    fetchConfigs(),
+    fetchPaymentTotals(),
+  ]);
+
+  const financials = vecinos.map((vecino) =>
+    buildVecinoFinancialSummary(vecino, totalsMap, configs),
+  );
+  const buffer = await buildExecutiveOverviewWorkbook({ financials, year });
+
+  if (actor) {
+    await logAudit({
+      userId: actor.id,
+      userIdentifier: actor.username,
+      role: actor.role,
+      ip: req?.ip ?? null,
+      action: "dashboard.export_overview_excel",
+      entity: "excel",
+      entityId: `${year}`,
+      metadata: { scope: "executive_overview" },
     });
   }
 

@@ -155,6 +155,24 @@ Regla de continuidad:
   - el encabezado se mantiene visible mientras baja por la tabla
   - el resumen por pasaje queda más legible
 
+### Ajuste de alcance del Excel ejecutivo 2026-05-09
+- Requerimiento adicional:
+  - el Excel descargable desde `Vista general` no debe usar el workbook completo
+  - debe exportar solo columnas ejecutivas
+- Solución aplicada:
+  - se creó un workbook específico para tesorería con estas columnas:
+    - `Direccion`
+    - `Nombre`
+    - `Pasaje`
+    - `Firma VºBº`
+    - `Cuota Portones`
+    - `Cuota Mantención`
+  - `Direccion` se exporta como `PASAJE + numeración`
+  - las cuotas se exportan en formato `X de Y`
+  - `dashboard/export-excel` ya no reutiliza el export completo del admin
+- Resultado esperado:
+  - el archivo descargado desde tesorería queda breve, ejecutivo y coherente con la tabla de `Vista general`
+
 ## Importación Excel 2026-05-08
 - Objetivo:
   - usar `Direcciones BD.xlsx` para precargar la base real del sistema
@@ -331,4 +349,4 @@ Si se rotan credenciales:
 
 ## Última actualización
 - Fecha: 2026-05-09
-- Estado: código listo con exportador para tesorero, cabecera fija en vista general y espaciado corregido en resumen por pasaje; pendiente publicación de este ajuste fino
+- Estado: código listo con exportador ejecutivo de tesorería limitado a columnas resumidas; pendiente publicación de este ajuste de alcance

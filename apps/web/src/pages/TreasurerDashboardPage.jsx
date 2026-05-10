@@ -371,7 +371,7 @@ function OverviewTable({ financials, onExport, exporting }) {
             placeholder="Filtrar por pasaje, dirección o representante"
           />
           <button className="ghost-button" disabled={exporting} onClick={onExport} type="button">
-            {exporting ? "Exportando..." : "Exportar Excel"}
+            {exporting ? "Exportando..." : "Exportar Excel ejecutivo"}
           </button>
         </div>
 
