@@ -140,6 +140,21 @@ Regla de continuidad:
   - menos confusión con el ancho del formulario
   - más tolerancia para vecinos con credenciales iniciales heredadas
 
+### Ajuste fino vista general 2026-05-09
+- Cambios adicionales solicitados:
+  - cabecera fija en la tabla de `Vista general`
+  - exportador Excel accesible también para `tesorero`
+  - separación más clara entre nombre del pasaje y cantidad de direcciones
+- Solución aplicada:
+  - se agregó `GET /api/dashboard/export-excel` para roles `admin` y `tesorero`
+  - `OverviewTable` ahora tiene botón `Exportar Excel`
+  - la tabla ejecutiva usa `thead` sticky dentro del contenedor con scroll
+  - el bloque por pasaje ahora usa un layout vertical en el título para evitar textos pegados como `EL HUERTO3 direcciones`
+- Resultado esperado:
+  - el tesorero puede exportar desde su propia vista general
+  - el encabezado se mantiene visible mientras baja por la tabla
+  - el resumen por pasaje queda más legible
+
 ## Importación Excel 2026-05-08
 - Objetivo:
   - usar `Direcciones BD.xlsx` para precargar la base real del sistema
@@ -316,4 +331,4 @@ Si se rotan credenciales:
 
 ## Última actualización
 - Fecha: 2026-05-09
-- Estado: código listo con 3 tabs en tesorería, resumen ejecutivo por concepto/pasaje, vista general por dirección y autorreparación de PIN inicial para vecinos; pendiente publicación de esta segunda iteración
+- Estado: código listo con exportador para tesorero, cabecera fija en vista general y espaciado corregido en resumen por pasaje; pendiente publicación de este ajuste fino

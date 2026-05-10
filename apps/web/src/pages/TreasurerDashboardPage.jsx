@@ -220,7 +220,7 @@ function StreetExecutiveSummary({ streetSummary }) {
       <div className="street-executive-list">
         {streetSummary.map((street) => (
           <div className="street-executive-row" key={street.pasaje}>
-            <div>
+            <div className="street-title-block">
               <strong>{street.pasaje}</strong>
               <span>{street.totalDirecciones} direcciones</span>
             </div>
@@ -335,7 +335,7 @@ function LedgerTable({ ledger, onEdit }) {
   );
 }
 
-function OverviewTable({ financials }) {
+function OverviewTable({ financials, onExport, exporting }) {
   const [filter, setFilter] = useState("");
 
   const rows = useMemo(() => {
@@ -363,12 +363,17 @@ function OverviewTable({ financials }) {
           <h2>Direcciones y estados financieros</h2>
         </div>
 
-        <input
-          className="search-input"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder="Filtrar por pasaje, dirección o representante"
-        />
+        <div className="overview-toolbar">
+          <input
+            className="search-input"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="Filtrar por pasaje, dirección o representante"
+          />
+          <button className="ghost-button" disabled={exporting} onClick={onExport} type="button">
+            {exporting ? "Exportando..." : "Exportar Excel"}
+          </button>
+        </div>
 
         <div className="table-wrap executive-table-wrap">
           <table className="data-table executive-table">
@@ -425,6 +430,7 @@ export function TreasurerDashboardPage() {
   const [ledger, setLedger] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [activeTab, setActiveTab] = useState("resumen");
+  const [exporting, setExporting] = useState(false);
 
   async function loadOverview() {
     setLoading(true);
@@ -444,6 +450,25 @@ export function TreasurerDashboardPage() {
     const response = await apiRequest(`/pagos/vecinos/${vecinoId}`);
     setLedger(response);
     setSelectedPayment(null);
+  }
+
+  async function handleExport() {
+    setExporting(true);
+
+    try {
+      const year = new Date().getFullYear();
+      const blob = await apiRequest(`/dashboard/export-excel?year=${year}`, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `comunidad-export-${year}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
   }
 
   useEffect(() => {
@@ -586,7 +611,11 @@ export function TreasurerDashboardPage() {
         ) : null}
 
         {activeTab === "vista" ? (
-          <OverviewTable financials={overview.financials} />
+          <OverviewTable
+            exporting={exporting}
+            financials={overview.financials}
+            onExport={handleExport}
+          />
         ) : null}
       </main>
     </LayoutShell>
