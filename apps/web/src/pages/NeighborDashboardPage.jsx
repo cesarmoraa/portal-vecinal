@@ -76,7 +76,7 @@ export function NeighborDashboardPage() {
                     <strong>{quotaCountText(data.summary.concepts[concept])}</strong>
                   </div>
                   <div>
-                    <span>Saldo</span>
+                    <span>Saldo pendiente</span>
                     <strong>{formatCurrency(data.summary.concepts[concept].pendingAmount)}</strong>
                   </div>
                   <div>

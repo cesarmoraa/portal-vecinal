@@ -1,6 +1,7 @@
 import { query } from "../db/pool.js";
 import { AppError } from "../lib/appError.js";
 import { roundQuotas } from "../lib/finance.js";
+import { normalizeConcept } from "../lib/normalizers.js";
 import {
   buildCommunityComparison,
   buildVecinoFinancialSummary,
@@ -69,14 +70,20 @@ export async function getVecinoLedger(vecinoId) {
 
   return {
     summary: buildVecinoFinancialSummary(vecino, totalsMap, configs),
-    payments: paymentsResult.rows.map((item) => ({
-      ...item,
-      monto: Number(item.monto),
-      equivalentQuotas:
-        configs[item.concepto]?.valor_cuota
-          ? roundQuotas(Number(item.monto) / Number(configs[item.concepto].valor_cuota))
+    payments: paymentsResult.rows.map((item) => {
+      const concepto = normalizeConcept(item.concepto);
+
+      return {
+        ...item,
+        concepto,
+        monto: Number(item.monto),
+        equivalentQuotas: configs[concepto]?.valor_cuota
+          ? roundQuotas(
+              Number(item.monto) / Number(configs[concepto].valor_cuota),
+            )
           : 0,
-    })),
+      };
+    }),
   };
 }
 

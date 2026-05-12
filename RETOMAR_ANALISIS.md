@@ -210,6 +210,26 @@ Regla de continuidad:
   - desaparecen valores técnicos como `excel_resumen`
   - las fechas quedan alineadas con el día correcto en Chile
 
+### Corrección de lectura real desde Excel para `LAS MALVAS 854` 2026-05-11
+- Validación directa sobre `Direcciones BD.xlsx`:
+  - en `$Portones`, `LAS MALVAS 854` sí tiene pagos importables
+  - el parser leyó 5 movimientos `PORTONES` para 2026:
+    - agosto: `$40.000`
+    - septiembre: `$40.000`
+    - octubre: `$40.000`
+    - noviembre: `$40.000`
+    - diciembre: `$40.000`
+- Problema detectado:
+  - si la base ya tenía esos pagos guardados como `portones`/`mantencion` en minúscula por una importación anterior, el resumen financiero podía ignorarlos al buscar solo `PORTONES` / `MANTENCION`
+- Solución aplicada:
+  - `fetchPaymentTotals()` ahora agrupa usando `upper(concepto)` y normaliza la clave resultante
+  - `getVecinoLedger()` normaliza `concepto` antes de calcular cuotas equivalentes y antes de enviarlo al frontend
+  - `groupPaymentsByVecino()` también normaliza conceptos para no romper exportaciones
+  - en la UI se reemplazó el texto ambiguo `Saldo` por `Saldo pendiente`
+- Resultado esperado:
+  - si en producción existían pagos válidos con concepto en minúscula, vuelven a sumarse correctamente
+  - el panel vecino deja de mostrar `0 de 12` por un problema de normalización
+
 ## Importación Excel 2026-05-08
 - Objetivo:
   - usar `Direcciones BD.xlsx` para precargar la base real del sistema

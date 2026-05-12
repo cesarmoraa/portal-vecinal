@@ -495,6 +495,8 @@ export function buildInitialNeighborUser(vecino, hash) {
 
 export function groupPaymentsByVecino(payments) {
   return payments.reduce((acc, payment) => {
+    const concept = normalizeConcept(payment.concepto);
+
     if (!acc[payment.vecino_id]) {
       acc[payment.vecino_id] = {
         PORTONES: [],
@@ -502,7 +504,11 @@ export function groupPaymentsByVecino(payments) {
       };
     }
 
-    acc[payment.vecino_id][payment.concepto].push({
+    if (!acc[payment.vecino_id][concept]) {
+      acc[payment.vecino_id][concept] = [];
+    }
+
+    acc[payment.vecino_id][concept].push({
       monto: Number(payment.monto),
       periodYear: payment.period_year,
       periodMonth: payment.period_month,

@@ -77,16 +77,16 @@ export async function fetchVecinos(db = { query }) {
 export async function fetchPaymentTotals(db = { query }) {
   const result = await db.query(
     `
-      select vecino_id, concepto, coalesce(sum(monto), 0) as total_paid
+      select vecino_id, upper(concepto) as concepto, coalesce(sum(monto), 0) as total_paid
       from pagos
       where deleted_at is null
         and coalesce(source, '') <> 'excel_resumen'
-      group by vecino_id, concepto
+      group by vecino_id, upper(concepto)
     `,
   );
 
   return result.rows.reduce((acc, row) => {
-    const key = `${row.vecino_id}:${row.concepto}`;
+    const key = `${row.vecino_id}:${normalizeConcept(row.concepto)}`;
     acc[key] = Number(row.total_paid);
     return acc;
   }, {});

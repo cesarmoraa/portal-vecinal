@@ -386,7 +386,7 @@ function OverviewTable({ financials, onExport, exporting }) {
                 <th>Portones 2026</th>
                 <th>Mantención 2026</th>
                 <th>Total abonado</th>
-                <th>Saldo</th>
+                <th>Saldo pendiente</th>
               </tr>
             </thead>
             <tbody>
