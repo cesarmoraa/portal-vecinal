@@ -545,9 +545,6 @@ export function TreasurerDashboardPage() {
         {activeTab === "resumen" ? (
           <section className="treasurer-workbench">
             <div className="operations-sidebar">
-              <TreasurerSummaryCards paymentState={overview.paymentState} />
-              <StreetExecutiveSummary streetSummary={overview.streetSummary} />
-
               <article className="glass-card side-card">
                 <div className="card-heading">
                   <p className="eyebrow">Buscar dirección</p>
@@ -578,9 +575,7 @@ export function TreasurerDashboardPage() {
                   ))}
                 </div>
               </article>
-            </div>
 
-            <div className="operations-sidebar">
               <PaymentEditor
                 selectedVecino={selectedVecino}
                 selectedPayment={selectedPayment}
@@ -590,6 +585,11 @@ export function TreasurerDashboardPage() {
                   }
                 }}
               />
+            </div>
+
+            <div className="operations-sidebar">
+              <TreasurerSummaryCards paymentState={overview.paymentState} />
+              <StreetExecutiveSummary streetSummary={overview.streetSummary} />
 
               <SelectedNeighborSummary ledger={ledger} />
 

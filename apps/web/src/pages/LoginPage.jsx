@@ -50,11 +50,8 @@ export function LoginPage() {
     <main className="login-shell">
       <section className="login-hero">
         <p className="eyebrow">Plataforma Vecinal Segura</p>
-        <h1>Gestión profesional de pagos, deuda y mapa comunitario.</h1>
-        <p>
-          El mapa es el centro operativo, pero la lógica crítica vive en backend:
-          autenticación, auditoría, cuotas equivalentes y estado financiero.
-        </p>
+        <h1>La plataforma digital de tu comunidad</h1>
+        <p>Visualiza pagos, estado vecinal y avance comunitario.</p>
       </section>
 
       <section className="login-card">

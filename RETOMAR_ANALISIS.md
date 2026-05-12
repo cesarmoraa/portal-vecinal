@@ -173,6 +173,22 @@ Regla de continuidad:
 - Resultado esperado:
   - el archivo descargado desde tesorería queda breve, ejecutivo y coherente con la tabla de `Vista general`
 
+### Ajuste de zoom del mapa 2026-05-11
+- Problema reportado:
+  - el mapa se veía muy mal al hacer zoom
+  - los marcadores se sentían demasiado grandes y pesados
+  - el fondo base casi desaparecía por exceso de gris y baja opacidad
+- Solución aplicada:
+  - `MapView` ahora adapta el tamaño del marcador según nivel de zoom
+  - se limitó mejor el rango de zoom útil
+  - se desactivaron animaciones de zoom/fade para evitar sensación rara en labels
+  - `fitBounds` quedó con un tope más conservador
+  - se devolvió más visibilidad al tile base para que el usuario entienda mejor el contexto del mapa
+- Resultado esperado:
+  - mejor lectura visual al acercarse o alejarse
+  - menos solapamiento aparente de etiquetas
+  - mapa más estable dentro de la pestaña
+
 ## Importación Excel 2026-05-08
 - Objetivo:
   - usar `Direcciones BD.xlsx` para precargar la base real del sistema
@@ -348,5 +364,5 @@ Si se rotan credenciales:
 - actualizar este archivo
 
 ## Última actualización
-- Fecha: 2026-05-09
-- Estado: código listo con exportador ejecutivo de tesorería limitado a columnas resumidas; pendiente publicación de este ajuste de alcance
+- Fecha: 2026-05-11
+- Estado: código listo con mejora de zoom en mapa y legibilidad de tiles; pendiente publicación de este ajuste visual

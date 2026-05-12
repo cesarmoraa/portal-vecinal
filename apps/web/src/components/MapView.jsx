@@ -1,6 +1,6 @@
 import { divIcon } from "leaflet";
-import { useEffect } from "react";
-import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import { useEffect, useState } from "react";
+import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { formatCurrency, formatQuotas } from "../lib/formatters.js";
 import { StatusBadge } from "./StatusBadge.jsx";
 
@@ -14,8 +14,8 @@ function FitBounds({ markers, active }) {
 
     const bounds = markers.map((marker) => [marker.latitud, marker.longitud]);
     map.fitBounds(bounds, {
-      padding: [72, 72],
-      maxZoom: 20,
+      padding: [96, 96],
+      maxZoom: 19.25,
     });
   }, [active, map, markers]);
 
@@ -40,7 +40,58 @@ function SyncMapSize({ active }) {
   return null;
 }
 
-function createMarkerIcon(marker) {
+function ZoomWatcher({ active, onZoomChange }) {
+  const map = useMapEvents({
+    zoomend() {
+      if (active) {
+        onZoomChange(map.getZoom());
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (active) {
+      onZoomChange(map.getZoom());
+    }
+  }, [active, map, onZoomChange]);
+
+  return null;
+}
+
+function getMarkerScale(zoom) {
+  if (zoom >= 19.5) {
+    return {
+      widthPerChar: 11,
+      minWidth: 52,
+      height: 30,
+      fontSize: 0.86,
+      paddingX: 14,
+      borderRadius: 15,
+    };
+  }
+
+  if (zoom >= 18.5) {
+    return {
+      widthPerChar: 12,
+      minWidth: 56,
+      height: 33,
+      fontSize: 0.95,
+      paddingX: 16,
+      borderRadius: 16,
+    };
+  }
+
+  return {
+    widthPerChar: 13,
+    minWidth: 62,
+    height: 36,
+    fontSize: 1.02,
+    paddingX: 18,
+    borderRadius: 17,
+  };
+}
+
+function createMarkerIcon(marker, zoom) {
   const statusClass =
     marker.status === "Al día"
       ? "map-marker-green"
@@ -51,14 +102,17 @@ function createMarkerIcon(marker) {
           : marker.status === "Sin firma"
             ? "map-marker-gray"
             : "map-marker-red";
-
-  const width = Math.max(58, marker.markerLabel.length * 12 + 18);
+  const scale = getMarkerScale(zoom);
+  const width = Math.max(
+    scale.minWidth,
+    marker.markerLabel.length * scale.widthPerChar + scale.paddingX,
+  );
 
   return divIcon({
     className: "custom-marker-wrapper",
-    html: `<div class="map-marker ${statusClass}">${marker.markerLabel}</div>`,
-    iconSize: [width, 34],
-    iconAnchor: [width / 2, 17],
+    html: `<div class="map-marker ${statusClass}" style="width:${width}px;height:${scale.height}px;font-size:${scale.fontSize}rem;border-radius:${scale.borderRadius}px;">${marker.markerLabel}</div>`,
+    iconSize: [width, scale.height],
+    iconAnchor: [width / 2, scale.height / 2],
   });
 }
 
@@ -67,16 +121,20 @@ function quotaProgressText(concept) {
 }
 
 export function MapView({ markers, streetSummary, paymentState, active = true }) {
+  const [zoom, setZoom] = useState(18.5);
+
   return (
     <section className="map-stage">
       <MapContainer
         center={[-33.477, -70.732]}
         zoom={18.5}
-        minZoom={17}
-        maxZoom={22}
+        minZoom={17.75}
+        maxZoom={20}
         zoomSnap={0.25}
         zoomDelta={0.5}
         markerZoomAnimation={false}
+        zoomAnimation={false}
+        fadeAnimation={false}
         scrollWheelZoom
         className="map-canvas"
       >
@@ -89,7 +147,7 @@ export function MapView({ markers, streetSummary, paymentState, active = true })
           <Marker
             key={marker.vecinoId}
             position={[marker.latitud, marker.longitud]}
-            icon={createMarkerIcon(marker)}
+            icon={createMarkerIcon(marker, zoom)}
           >
             <Popup minWidth={280}>
               <div className="popup-card">
@@ -132,6 +190,7 @@ export function MapView({ markers, streetSummary, paymentState, active = true })
 
         <FitBounds active={active} markers={markers} />
         <SyncMapSize active={active} />
+        <ZoomWatcher active={active} onZoomChange={setZoom} />
       </MapContainer>
 
       <aside className="floating-card floating-top-right">

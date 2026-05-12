@@ -222,8 +222,8 @@ textarea {
 }
 
 .map-stage .leaflet-tile-pane {
-  filter: grayscale(1) saturate(0.15) brightness(1.05);
-  opacity: 0.28;
+  filter: grayscale(0.55) saturate(0.55) brightness(1.02);
+  opacity: 0.58;
 }
 
 .map-stage .leaflet-control-zoom a {
