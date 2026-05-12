@@ -15,9 +15,23 @@ export function formatDate(value) {
     return "Sin fecha";
   }
 
+  let date;
+
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    if (match) {
+      date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    }
+  }
+
+  if (!date) {
+    date = new Date(value);
+  }
+
   return new Intl.DateTimeFormat("es-CL", {
     dateStyle: "medium",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export function formatQuotas(value) {
@@ -26,4 +40,3 @@ export function formatQuotas(value) {
     maximumFractionDigits: 2,
   });
 }
-

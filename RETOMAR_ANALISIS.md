@@ -189,6 +189,27 @@ Regla de continuidad:
   - menos solapamiento aparente de etiquetas
   - mapa más estable dentro de la pestaña
 
+### Limpieza de datos falsos en panel vecino 2026-05-11
+- Problema reportado:
+  - en `Detalle histórico` del vecino seguían apareciendo datos confusos o falsos
+  - se veía la columna técnica `Origen` con valores como `excel_resumen` y `manual`
+  - algunas fechas aparecían corridas, por ejemplo al cierre del año anterior
+- Causa real:
+  - durante la importación anterior se habían creado pagos sintéticos `source = excel_resumen` para complementar diferencias entre `Resumen` y hojas mensuales
+  - esos movimientos eran útiles como precarga técnica, pero no debían mostrarse al vecino ni entrar en totales ejecutivos
+  - el frontend estaba formateando fechas `YYYY-MM-DD` con `new Date(...)`, lo que en Chile podía restar un día por zona horaria
+- Solución aplicada:
+  - `neighborService.getVecinoLedger()` ahora excluye `source = excel_resumen`
+  - `dashboardService.fetchPaymentTotals()` ahora excluye `source = excel_resumen`
+  - `adminService.exportDatabaseToWorkbook()` ahora excluye `source = excel_resumen`
+  - `importWorkbookToDatabase()` ya no vuelve a crear esos pagos sintéticos desde `Resumen`
+  - `NeighborDashboardPage` dejó de mostrar la columna `Origen`
+  - `formatDate()` ahora interpreta `YYYY-MM-DD` como fecha local para evitar el corrimiento
+- Resultado esperado:
+  - el vecino verá solo pagos reales importados desde hojas mensuales o pagos manuales reales
+  - desaparecen valores técnicos como `excel_resumen`
+  - las fechas quedan alineadas con el día correcto en Chile
+
 ## Importación Excel 2026-05-08
 - Objetivo:
   - usar `Direcciones BD.xlsx` para precargar la base real del sistema

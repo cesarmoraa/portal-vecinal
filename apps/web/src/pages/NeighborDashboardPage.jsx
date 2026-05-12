@@ -135,7 +135,6 @@ export function NeighborDashboardPage() {
                   <th>Tipo</th>
                   <th>Monto</th>
                   <th>Cuotas equivalentes</th>
-                  <th>Origen</th>
                 </tr>
               </thead>
               <tbody>
@@ -145,7 +144,6 @@ export function NeighborDashboardPage() {
                     <td>{payment.concepto}</td>
                     <td>{formatCurrency(payment.monto)}</td>
                     <td>{formatQuotas(payment.equivalentQuotas)}</td>
-                    <td>{payment.source}</td>
                   </tr>
                 ))}
               </tbody>

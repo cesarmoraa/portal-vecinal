@@ -19,14 +19,6 @@ import {
   fetchVecinos,
 } from "./dashboardService.js";
 
-function buildParsedPaymentsMap(payments) {
-  return payments.reduce((acc, payment) => {
-    const key = `${payment.vecinoKey}:${payment.concepto}`;
-    acc[key] = (acc[key] ?? 0) + Number(payment.monto);
-    return acc;
-  }, {});
-}
-
 function toLegacyTipoPago(concepto) {
   return normalizeConcept(concepto).toLowerCase();
 }
@@ -376,7 +368,6 @@ export async function importWorkbookToDatabase({
   const parsed = await parseExcelWorkbook(source, year);
 
   return withTransaction(async (client) => {
-    const configs = await fetchConfigs(client);
     const userColumns = await getPublicTableColumns(client, "users");
     const paymentColumns = await getPublicTableColumns(client, "pagos");
     let importedPaymentsCount = 0;
@@ -389,7 +380,6 @@ export async function importWorkbookToDatabase({
     }
 
     const vecinoIdByKey = new Map();
-    const importedMonthlyTotals = buildParsedPaymentsMap(parsed.payments);
 
     for (const vecino of parsed.vecinos) {
       const vecinoId = await upsertVecino(client, vecino);
@@ -468,54 +458,6 @@ export async function importWorkbookToDatabase({
       importedPaymentsCount += 1;
     }
 
-    for (const vecino of parsed.vecinos) {
-      const vecinoId = vecinoIdByKey.get(`${vecino.pasaje}::${vecino.numeracion}`);
-
-      if (!vecinoId) {
-        continue;
-      }
-
-      for (const [concepto, equivalentQuotas] of [
-        ["PORTONES", Number(vecino.cuotaPortonesInicial) || 0],
-        ["MANTENCION", Number(vecino.cuotaMantencionInicial) || 0],
-      ]) {
-        if (equivalentQuotas <= 0) {
-          continue;
-        }
-
-        const config = configs[normalizeConcept(concepto)];
-
-        if (!config?.valor_cuota) {
-          throw new AppError(
-            400,
-            `Falta configuración activa para ${concepto}. Ajusta CONFIGURACION_COBROS antes de importar.`,
-          );
-        }
-
-        const targetAmount = equivalentQuotas * Number(config.valor_cuota);
-        const alreadyImportedAmount =
-          importedMonthlyTotals[`${vecino.pasaje}::${vecino.numeracion}:${concepto}`] ?? 0;
-        const missingAmount = Math.max(0, targetAmount - alreadyImportedAmount);
-
-        if (missingAmount <= 0) {
-          continue;
-        }
-
-        await upsertImportedPayment(client, {
-          vecinoId,
-          concepto,
-          monto: missingAmount,
-          fechaPago: `${year}-01-01`,
-          periodYear: year,
-          periodMonth: null,
-          observacion: `Precarga desde Resumen (${equivalentQuotas} cuotas equivalentes)`,
-          source: "excel_resumen",
-          sourceRef: `RESUMEN:${concepto}:${year}`,
-        }, paymentColumns);
-        importedPaymentsCount += 1;
-      }
-    }
-
     await logAudit({
       userId: actor?.id ?? null,
       userIdentifier: actor?.username ?? "cli-import",
@@ -550,6 +492,7 @@ export async function exportDatabaseToWorkbook({ actor, req, year, outputPath = 
         select vecino_id, concepto, monto, period_year, period_month, fecha_pago
         from pagos
         where deleted_at is null
+          and coalesce(source, '') <> 'excel_resumen'
         order by fecha_pago asc
       `,
     ),

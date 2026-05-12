@@ -80,6 +80,7 @@ export async function fetchPaymentTotals(db = { query }) {
       select vecino_id, concepto, coalesce(sum(monto), 0) as total_paid
       from pagos
       where deleted_at is null
+        and coalesce(source, '') <> 'excel_resumen'
       group by vecino_id, concepto
     `,
   );

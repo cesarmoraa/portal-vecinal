@@ -52,7 +52,9 @@ export async function getVecinoLedger(vecinoId) {
           period_month,
           source
         from pagos
-        where vecino_id = $1 and deleted_at is null
+        where vecino_id = $1
+          and deleted_at is null
+          and coalesce(source, '') <> 'excel_resumen'
         order by fecha_pago desc, created_at desc
       `,
       [vecinoId],
@@ -98,8 +100,6 @@ export async function getNeighborPortal(user) {
 
   if (ledger.summary.generalStatus === "Al día" || ledger.summary.generalStatus === "Adelantado") {
     message = "Estás al día. Gracias por apoyar la seguridad del pasaje.";
-  } else if (ledger.summary.generalStatus === "Atrasado" && relativeDifference < -25) {
-    message = "Tu avance está bajo el promedio de la comunidad.";
   } else if (ledger.summary.generalStatus === "Atrasado") {
     message = "Registras pagos pendientes.";
   }
