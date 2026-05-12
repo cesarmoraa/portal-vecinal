@@ -271,9 +271,30 @@ async function updateVecinoUser(client, vecino, vecinoId, userColumns) {
 
 export async function updateBillingConfig({ actor, req, concept, payload }) {
   const normalizedConcept = normalizeConcept(concept);
+  const cuotasTotales = Number(payload.cuotasTotales);
+  const valorCuota = Number(payload.valorCuota);
+  const anio = Number(payload.anio);
+  const mesInicio = Number(payload.mesInicio ?? 1);
+  const activo = payload.activo === undefined ? true : Boolean(payload.activo);
 
-  if (!["PORTONES", "MANTENCION"].includes(normalizedConcept)) {
+  if (!normalizedConcept) {
     throw new AppError(400, "Concepto inválido.");
+  }
+
+  if (!Number.isFinite(cuotasTotales) || cuotasTotales <= 0) {
+    throw new AppError(400, "La cantidad de cuotas debe ser mayor que cero.");
+  }
+
+  if (!Number.isFinite(valorCuota) || valorCuota <= 0) {
+    throw new AppError(400, "El valor de cuota debe ser mayor que cero.");
+  }
+
+  if (!Number.isFinite(anio) || anio < 2000) {
+    throw new AppError(400, "El año configurado no es válido.");
+  }
+
+  if (!Number.isFinite(mesInicio) || mesInicio < 1 || mesInicio > 12) {
+    throw new AppError(400, "El mes de inicio debe estar entre 1 y 12.");
   }
 
   return withTransaction(async (client) => {
@@ -304,11 +325,11 @@ export async function updateBillingConfig({ actor, req, concept, payload }) {
       `,
       [
         normalizedConcept,
-        Number(payload.cuotasTotales),
-        Number(payload.valorCuota),
-        Number(payload.anio),
-        Number(payload.mesInicio ?? 1),
-        Boolean(payload.activo),
+        cuotasTotales,
+        valorCuota,
+        anio,
+        mesInicio,
+        activo,
       ],
     );
 

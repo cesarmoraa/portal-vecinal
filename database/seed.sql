@@ -5,8 +5,8 @@
 
 insert into configuracion_cobros (concepto, cuotas_totales, valor_cuota, anio, mes_inicio, activo)
 values
-  ('PORTONES', 12, 10000, extract(year from now())::integer, 1, true),
-  ('MANTENCION', 10, 2000, extract(year from now())::integer, 1, true)
+  ('PORTONES', 5, 40000, extract(year from now())::integer, 1, true),
+  ('MANTENCION', 12, 2000, extract(year from now())::integer, 1, true)
 on conflict (concepto) do update
 set
   cuotas_totales = excluded.cuotas_totales,
@@ -14,4 +14,3 @@ set
   anio = excluded.anio,
   mes_inicio = excluded.mes_inicio,
   activo = excluded.activo;
-

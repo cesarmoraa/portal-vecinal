@@ -119,8 +119,17 @@ export async function getNeighborPortal(user) {
       pasaje: ledger.summary.pasaje,
       pasajeAlDia: streetCommunity.vecinosAlDia,
       pasajeTotal: streetCommunity.totalDirecciones,
-      resumenPortones: `${roundQuotas(ledger.summary.concepts.PORTONES.equivalentQuotas)} de ${ledger.summary.concepts.PORTONES.totalQuotas}`,
-      resumenMantencion: `${roundQuotas(ledger.summary.concepts.MANTENCION.equivalentQuotas)} de ${ledger.summary.concepts.MANTENCION.totalQuotas}`,
+      conceptSummaries: ledger.summary.conceptsList.map((concept) => ({
+        concept: concept.concept,
+        anio: concept.anio,
+        resumen: `${roundQuotas(concept.equivalentQuotas)} de ${concept.totalQuotas}`,
+      })),
+      resumenPortones: ledger.summary.concepts.PORTONES
+        ? `${roundQuotas(ledger.summary.concepts.PORTONES.equivalentQuotas)} de ${ledger.summary.concepts.PORTONES.totalQuotas}`
+        : null,
+      resumenMantencion: ledger.summary.concepts.MANTENCION
+        ? `${roundQuotas(ledger.summary.concepts.MANTENCION.equivalentQuotas)} de ${ledger.summary.concepts.MANTENCION.totalQuotas}`
+        : null,
       message,
     },
   };

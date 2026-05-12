@@ -12,10 +12,30 @@ function isUpToDateStatus(status) {
   return status === "Al día" || status === "Adelantado";
 }
 
+function getOrderedConfigs(configs) {
+  return Object.values(configs).sort((a, b) => {
+    if (Number(a.anio) !== Number(b.anio)) {
+      return Number(a.anio) - Number(b.anio);
+    }
+
+    if (Number(a.mes_inicio ?? 1) !== Number(b.mes_inicio ?? 1)) {
+      return Number(a.mes_inicio ?? 1) - Number(b.mes_inicio ?? 1);
+    }
+
+    return a.concepto.localeCompare(b.concepto, "es");
+  });
+}
+
 function countConceptStatuses(financials, conceptKey) {
   return financials.reduce(
     (acc, item) => {
-      const status = item.concepts[conceptKey].status;
+      const concept = item.concepts[conceptKey];
+
+      if (!concept) {
+        return acc;
+      }
+
+      const status = concept.status;
 
       if (isUpToDateStatus(status)) {
         acc.alDia += 1;
@@ -93,25 +113,33 @@ export async function fetchPaymentTotals(db = { query }) {
 }
 
 export function buildVecinoFinancialSummary(vecino, totalsMap, configs, today = new Date()) {
-  const portones = computeConceptProgress(
-    totalsMap[`${vecino.id}:PORTONES`] ?? 0,
-    configs.PORTONES,
-    today,
+  const orderedConfigs = getOrderedConfigs(configs);
+  const conceptsMap = Object.fromEntries(
+    orderedConfigs.map((config) => [
+      config.concepto,
+      computeConceptProgress(
+        totalsMap[`${vecino.id}:${config.concepto}`] ?? 0,
+        config,
+        today,
+      ),
+    ]),
   );
-  const mantencion = computeConceptProgress(
-    totalsMap[`${vecino.id}:MANTENCION`] ?? 0,
-    configs.MANTENCION,
-    today,
-  );
-  const concepts = [portones, mantencion];
+  const concepts = Object.values(conceptsMap);
   const generalStatus = computeGeneralStatus({
     hasSignature: vecino.firma_vobo,
     concepts,
   });
-  const totalCollected = roundCurrency(portones.totalPaid + mantencion.totalPaid);
-  const totalPending = roundCurrency(portones.pendingAmount + mantencion.pendingAmount);
+  const totalCollected = roundCurrency(concepts.reduce((sum, item) => sum + item.totalPaid, 0));
+  const totalPending = roundCurrency(concepts.reduce((sum, item) => sum + item.pendingAmount, 0));
   const progressPercentage = roundQuotas(
-    concepts.reduce((sum, item) => sum + item.progressPercentage, 0) / concepts.length,
+    concepts.length
+      ? concepts.reduce((sum, item) => sum + item.progressPercentage, 0) / concepts.length
+      : 0,
+  );
+  const markerConcepts = concepts.slice(0, 2);
+  const markerLabel = formatMarkerLabel(
+    markerConcepts[0]?.equivalentQuotas ?? 0,
+    markerConcepts[1]?.equivalentQuotas ?? 0,
   );
 
   return {
@@ -131,11 +159,15 @@ export function buildVecinoFinancialSummary(vecino, totalsMap, configs, today = 
     totalCollected,
     totalPending,
     progressPercentage,
-    concepts: {
-      PORTONES: portones,
-      MANTENCION: mantencion,
-    },
-    markerLabel: formatMarkerLabel(portones.equivalentQuotas, mantencion.equivalentQuotas),
+    concepts: conceptsMap,
+    conceptsList: orderedConfigs.map((config) => ({
+      concept: config.concepto,
+      anio: Number(config.anio),
+      mesInicio: Number(config.mes_inicio ?? 1),
+      activo: Boolean(config.activo),
+      ...conceptsMap[config.concepto],
+    })),
+    markerLabel,
   };
 }
 
@@ -146,10 +178,24 @@ export function buildCommunityComparison(financials) {
   ).length;
   const withoutSignature = financials.filter((item) => item.generalStatus === "Sin firma").length;
   const delayed = financials.filter((item) => item.generalStatus === "Atrasado").length;
-  const totalPortones = financials.reduce((sum, item) => sum + item.concepts.PORTONES.totalPaid, 0);
-  const totalMantencion = financials.reduce(
-    (sum, item) => sum + item.concepts.MANTENCION.totalPaid,
-    0,
+  const conceptKeys = Array.from(
+    new Set(financials.flatMap((item) => Object.keys(item.concepts))),
+  ).sort((a, b) => a.localeCompare(b, "es"));
+  const conceptStats = Object.fromEntries(
+    conceptKeys.map((conceptKey) => {
+      const statusCounts = countConceptStatuses(financials, conceptKey);
+
+      return [
+        conceptKey,
+        {
+          totalRecaudado: roundCurrency(
+            financials.reduce((sum, item) => sum + (item.concepts[conceptKey]?.totalPaid ?? 0), 0),
+          ),
+          alDia: statusCounts.alDia,
+          atrasados: statusCounts.atrasados,
+        },
+      ];
+    }),
   );
   const avgAdvance =
     total === 0
@@ -160,16 +206,20 @@ export function buildCommunityComparison(financials) {
 
   return {
     totalDirecciones: total,
-    totalRecaudadoPortones: roundCurrency(totalPortones),
-    totalRecaudadoMantencion: roundCurrency(totalMantencion),
+    totalRecaudadoPortones: conceptStats.PORTONES?.totalRecaudado ?? 0,
+    totalRecaudadoMantencion: conceptStats.MANTENCION?.totalRecaudado ?? 0,
+    totalRecaudadoTotal: roundCurrency(
+      Object.values(conceptStats).reduce((sum, item) => sum + item.totalRecaudado, 0),
+    ),
     vecinosAlDia: upToDate,
     vecinosAtrasados: delayed,
     vecinosSinFirma: withoutSignature,
     porcentajeAvance: avgAdvance,
-    conceptos: {
-      PORTONES: countConceptStatuses(financials, "PORTONES"),
-      MANTENCION: countConceptStatuses(financials, "MANTENCION"),
-    },
+    conceptos: conceptStats,
+    conceptsList: conceptKeys.map((conceptKey) => ({
+      concept: conceptKey,
+      ...conceptStats[conceptKey],
+    })),
   };
 }
 
@@ -185,22 +235,11 @@ export function buildStreetSummary(financials) {
         totalDirecciones: 0,
         firmasSi: 0,
         firmasNo: 0,
-        totalPortonesQuotas: 0,
-        totalMantencionQuotas: 0,
         totalRecaudado: 0,
         totalAvance: 0,
         vecinosAlDia: 0,
         vecinosAtrasados: 0,
-        conceptos: {
-          PORTONES: {
-            alDia: 0,
-            atrasados: 0,
-          },
-          MANTENCION: {
-            alDia: 0,
-            atrasados: 0,
-          },
-        },
+        conceptos: {},
       });
     }
 
@@ -208,16 +247,29 @@ export function buildStreetSummary(financials) {
     bucket.totalDirecciones += 1;
     bucket.firmasSi += item.firmaVobo ? 1 : 0;
     bucket.firmasNo += item.firmaVobo ? 0 : 1;
-    bucket.totalPortonesQuotas += item.concepts.PORTONES.equivalentQuotas;
-    bucket.totalMantencionQuotas += item.concepts.MANTENCION.equivalentQuotas;
     bucket.totalRecaudado += item.totalCollected;
     bucket.totalAvance += item.progressPercentage;
     bucket.vecinosAlDia +=
       item.generalStatus === "Al día" || item.generalStatus === "Adelantado" ? 1 : 0;
     bucket.vecinosAtrasados +=
       item.generalStatus === "Atrasado" || item.generalStatus === "Parcial" ? 1 : 0;
-    bucket.conceptos.PORTONES[item.concepts.PORTONES.status === "Al día" || item.concepts.PORTONES.status === "Adelantado" ? "alDia" : "atrasados"] += 1;
-    bucket.conceptos.MANTENCION[item.concepts.MANTENCION.status === "Al día" || item.concepts.MANTENCION.status === "Adelantado" ? "alDia" : "atrasados"] += 1;
+
+    Object.entries(item.concepts).forEach(([conceptKey, concept]) => {
+      if (!bucket.conceptos[conceptKey]) {
+        bucket.conceptos[conceptKey] = {
+          alDia: 0,
+          atrasados: 0,
+          totalRecaudado: 0,
+          totalCuotas: 0,
+        };
+      }
+
+      bucket.conceptos[conceptKey][
+        isUpToDateStatus(concept.status) ? "alDia" : "atrasados"
+      ] += 1;
+      bucket.conceptos[conceptKey].totalRecaudado += concept.totalPaid;
+      bucket.conceptos[conceptKey].totalCuotas += concept.equivalentQuotas;
+    });
   }
 
   return Array.from(grouped.values())
@@ -226,8 +278,12 @@ export function buildStreetSummary(financials) {
       totalDirecciones: item.totalDirecciones,
       firmasSi: item.firmasSi,
       firmasNo: item.firmasNo,
-      promedioCuotasPortones: roundQuotas(item.totalPortonesQuotas / item.totalDirecciones),
-      promedioCuotasMantencion: roundQuotas(item.totalMantencionQuotas / item.totalDirecciones),
+      promedioCuotasPortones: roundQuotas(
+        (item.conceptos.PORTONES?.totalCuotas ?? 0) / item.totalDirecciones,
+      ),
+      promedioCuotasMantencion: roundQuotas(
+        (item.conceptos.MANTENCION?.totalCuotas ?? 0) / item.totalDirecciones,
+      ),
       totalRecaudado: roundCurrency(item.totalRecaudado),
       porcentajeAvance: roundQuotas(item.totalAvance / item.totalDirecciones),
       vecinosAlDia: item.vecinosAlDia,
@@ -251,8 +307,7 @@ export function buildMapMarkers(financials) {
         representanteNombre: item.representanteNombre,
         telefono: item.telefono,
         firmaVobo: item.firmaVobo ? "SI" : "NO",
-        portones: item.concepts.PORTONES,
-        mantencion: item.concepts.MANTENCION,
+        concepts: item.conceptsList,
         totalCollected: item.totalCollected,
         totalPending: item.totalPending,
       },

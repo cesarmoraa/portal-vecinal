@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { LayoutShell } from "../components/LayoutShell.jsx";
 import { StatusBadge } from "../components/StatusBadge.jsx";
 import { apiRequest } from "../lib/api.js";
-import { formatCurrency, formatDate, formatQuotas } from "../lib/formatters.js";
+import { formatConceptLabel, formatCurrency, formatDate, formatQuotas } from "../lib/formatters.js";
 
 function quotaCountText(concept) {
   return `${formatQuotas(concept.equivalentQuotas)} de ${formatQuotas(concept.totalQuotas)}`;
@@ -61,31 +61,31 @@ export function NeighborDashboardPage() {
           <article className="glass-card">
             <div className="card-heading">
               <p className="eyebrow">Detalle por concepto</p>
-              <h2>Portones y mantención</h2>
+              <h2>Conceptos activos</h2>
             </div>
 
-            {["PORTONES", "MANTENCION"].map((concept) => (
-              <div className="concept-block" key={concept}>
+            {data.summary.conceptsList.map((concept) => (
+              <div className="concept-block" key={concept.concept}>
                 <div className="concept-title-row">
-                  <strong>{concept === "PORTONES" ? "Portones" : "Mantención"}</strong>
-                  <StatusBadge value={data.summary.concepts[concept].status} />
+                  <strong>{formatConceptLabel(concept.concept)}</strong>
+                  <StatusBadge value={concept.status} />
                 </div>
                 <div className="summary-grid">
                   <div>
                     <span>Cuotas pagadas 2026</span>
-                    <strong>{quotaCountText(data.summary.concepts[concept])}</strong>
+                    <strong>{quotaCountText(concept)}</strong>
                   </div>
                   <div>
                     <span>Saldo pendiente</span>
-                    <strong>{formatCurrency(data.summary.concepts[concept].pendingAmount)}</strong>
+                    <strong>{formatCurrency(concept.pendingAmount)}</strong>
                   </div>
                   <div>
                     <span>Total abonado</span>
-                    <strong>{formatCurrency(data.summary.concepts[concept].totalPaid)}</strong>
+                    <strong>{formatCurrency(concept.totalPaid)}</strong>
                   </div>
                   <div>
                     <span>Cuotas esperadas hoy</span>
-                    <strong>{formatQuotas(data.summary.concepts[concept].expectedQuotas)}</strong>
+                    <strong>{formatQuotas(concept.expectedQuotas)}</strong>
                   </div>
                 </div>
               </div>
@@ -107,14 +107,12 @@ export function NeighborDashboardPage() {
                 <span>Vecinos al día en {data.comparison.pasaje}</span>
                 <strong>{data.comparison.pasajeAlDia} / {data.comparison.pasajeTotal}</strong>
               </div>
-              <div>
-                <span>Portones 2026</span>
-                <strong>{data.comparison.resumenPortones}</strong>
-              </div>
-              <div>
-                <span>Mantención 2026</span>
-                <strong>{data.comparison.resumenMantencion}</strong>
-              </div>
+              {data.comparison.conceptSummaries.map((concept) => (
+                <div key={concept.concept}>
+                  <span>{formatConceptLabel(concept.concept)}</span>
+                  <strong>{concept.resumen}</strong>
+                </div>
+              ))}
             </div>
 
             <p className="message-card">{data.comparison.message}</p>
@@ -141,7 +139,7 @@ export function NeighborDashboardPage() {
                 {data.payments.map((payment) => (
                   <tr key={payment.id}>
                     <td>{formatDate(payment.fecha_pago)}</td>
-                    <td>{payment.concepto}</td>
+                    <td>{formatConceptLabel(payment.concepto)}</td>
                     <td>{formatCurrency(payment.monto)}</td>
                     <td>{formatQuotas(payment.equivalentQuotas)}</td>
                   </tr>

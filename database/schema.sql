@@ -5,10 +5,6 @@ begin
   if not exists (select 1 from pg_type where typname = 'user_role') then
     create type user_role as enum ('admin', 'tesorero', 'vecino');
   end if;
-
-  if not exists (select 1 from pg_type where typname = 'payment_concept') then
-    create type payment_concept as enum ('PORTONES', 'MANTENCION');
-  end if;
 end
 $$;
 
@@ -64,7 +60,7 @@ create unique index if not exists users_pasaje_numero_uidx
   where role = 'vecino';
 
 create table if not exists configuracion_cobros (
-  concepto payment_concept primary key,
+  concepto text primary key,
   cuotas_totales integer not null check (cuotas_totales > 0),
   valor_cuota numeric(12, 2) not null check (valor_cuota > 0),
   anio integer not null,
@@ -77,7 +73,7 @@ create table if not exists configuracion_cobros (
 create table if not exists pagos (
   id uuid primary key default gen_random_uuid(),
   vecino_id uuid not null references vecinos(id) on delete cascade,
-  concepto payment_concept not null,
+  concepto text not null,
   monto numeric(12, 2) not null check (monto > 0),
   fecha_pago date not null,
   period_year integer,
@@ -152,6 +148,6 @@ execute function touch_updated_at();
 
 insert into configuracion_cobros (concepto, cuotas_totales, valor_cuota, anio, mes_inicio, activo)
 values
-  ('PORTONES', 12, 10000, extract(year from now())::integer, 1, true),
-  ('MANTENCION', 10, 2000, extract(year from now())::integer, 1, true)
+  ('PORTONES', 5, 40000, extract(year from now())::integer, 1, true),
+  ('MANTENCION', 12, 2000, extract(year from now())::integer, 1, true)
 on conflict (concepto) do nothing;

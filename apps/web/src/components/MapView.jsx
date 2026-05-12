@@ -1,7 +1,7 @@
 import { divIcon } from "leaflet";
 import { useEffect, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
-import { formatCurrency, formatQuotas } from "../lib/formatters.js";
+import { formatConceptLabel, formatCurrency, formatQuotas } from "../lib/formatters.js";
 import { StatusBadge } from "./StatusBadge.jsx";
 
 function FitBounds({ markers, active }) {
@@ -166,14 +166,12 @@ export function MapView({ markers, streetSummary, paymentState, active = true })
                     <dt>Firma</dt>
                     <dd>{marker.popup.firmaVobo}</dd>
                   </div>
-                  <div>
-                    <dt>Portones</dt>
-                    <dd>{quotaProgressText(marker.popup.portones)} cuotas</dd>
-                  </div>
-                  <div>
-                    <dt>Mantención</dt>
-                    <dd>{quotaProgressText(marker.popup.mantencion)} cuotas</dd>
-                  </div>
+                  {marker.popup.concepts.map((concept) => (
+                    <div key={concept.concept}>
+                      <dt>{formatConceptLabel(concept.concept)}</dt>
+                      <dd>{quotaProgressText(concept)} cuotas</dd>
+                    </div>
+                  ))}
                   <div>
                     <dt>Saldo pendiente</dt>
                     <dd>{formatCurrency(marker.popup.totalPending)}</dd>
@@ -227,14 +225,12 @@ export function MapView({ markers, streetSummary, paymentState, active = true })
             <span>Total direcciones</span>
             <strong>{paymentState.totalDirecciones}</strong>
           </div>
-          <div>
-            <span>Portones</span>
-            <strong>{formatCurrency(paymentState.totalRecaudadoPortones)}</strong>
-          </div>
-          <div>
-            <span>Mantención</span>
-            <strong>{formatCurrency(paymentState.totalRecaudadoMantencion)}</strong>
-          </div>
+          {paymentState.conceptsList.map((concept) => (
+            <div key={concept.concept}>
+              <span>{formatConceptLabel(concept.concept)}</span>
+              <strong>{formatCurrency(concept.totalRecaudado)}</strong>
+            </div>
+          ))}
           <div>
             <span>Vecinos al día</span>
             <strong>{paymentState.vecinosAlDia} de {paymentState.totalDirecciones}</strong>

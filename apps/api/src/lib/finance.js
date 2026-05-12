@@ -89,6 +89,10 @@ export function computeGeneralStatus({ hasSignature, concepts }) {
     return "Sin firma";
   }
 
+  if (!concepts.length) {
+    return "Sin datos";
+  }
+
   const statuses = concepts.map((item) => item.status);
 
   if (statuses.every((status) => status === "Al día")) {

@@ -40,3 +40,28 @@ export function formatQuotas(value) {
     maximumFractionDigits: 2,
   });
 }
+
+export function formatConceptLabel(value) {
+  return `${value ?? ""}`
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .map((word) => {
+      const normalized = word.toUpperCase();
+
+      if (normalized === "MANTENCION" || normalized === "MANTENCIÓN") {
+        return "Mantención";
+      }
+
+      if (!word) {
+        return "";
+      }
+
+      if (/^\d+$/.test(word)) {
+        return word;
+      }
+
+      return `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`;
+    })
+    .join(" ");
+}

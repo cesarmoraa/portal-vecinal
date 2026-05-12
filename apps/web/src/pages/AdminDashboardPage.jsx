@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { LayoutShell } from "../components/LayoutShell.jsx";
 import { MapView } from "../components/MapView.jsx";
 import { apiRequest } from "../lib/api.js";
-import { formatCurrency, formatDate } from "../lib/formatters.js";
+import { formatConceptLabel, formatCurrency, formatDate } from "../lib/formatters.js";
 
 export function AdminDashboardPage() {
   const [overview, setOverview] = useState(null);
@@ -14,6 +14,14 @@ export function AdminDashboardPage() {
   const [selectedVecino, setSelectedVecino] = useState(null);
   const [temporaryPin, setTemporaryPin] = useState("");
   const [configForm, setConfigForm] = useState({});
+  const [newConfig, setNewConfig] = useState({
+    concept: "",
+    cuotas_totales: "",
+    valor_cuota: "",
+    anio: new Date().getFullYear(),
+    mes_inicio: 1,
+    activo: true,
+  });
   const [treasurerForm, setTreasurerForm] = useState({
     username: "",
     password: "",
@@ -35,10 +43,7 @@ export function AdminDashboardPage() {
 
       setOverview(overviewResponse);
       setAudit(auditResponse.rows);
-      setConfigForm({
-        PORTONES: overviewResponse.configs.PORTONES,
-        MANTENCION: overviewResponse.configs.MANTENCION,
-      });
+      setConfigForm(overviewResponse.configs);
     } catch (error) {
       setLoadError(error.message);
     } finally {
@@ -66,7 +71,7 @@ export function AdminDashboardPage() {
   }, [vecinoSearch]);
 
   async function handleConfigSave(concept) {
-    await apiRequest(`/admin/configuracion-cobros/${concept}`, {
+    await apiRequest(`/admin/configuracion-cobros/${encodeURIComponent(concept)}`, {
       method: "PUT",
       body: {
         cuotasTotales: Number(configForm[concept].cuotas_totales),
@@ -77,6 +82,32 @@ export function AdminDashboardPage() {
       },
     });
     setMessage(`Configuración ${concept} actualizada.`);
+    await loadAdminData();
+  }
+
+  async function handleCreateConcept(event) {
+    event.preventDefault();
+
+    await apiRequest(`/admin/configuracion-cobros/${encodeURIComponent(newConfig.concept)}`, {
+      method: "PUT",
+      body: {
+        cuotasTotales: Number(newConfig.cuotas_totales),
+        valorCuota: Number(newConfig.valor_cuota),
+        anio: Number(newConfig.anio),
+        mesInicio: Number(newConfig.mes_inicio),
+        activo: Boolean(newConfig.activo),
+      },
+    });
+
+    setMessage(`Concepto ${newConfig.concept} creado o actualizado.`);
+    setNewConfig({
+      concept: "",
+      cuotas_totales: "",
+      valor_cuota: "",
+      anio: new Date().getFullYear(),
+      mes_inicio: 1,
+      activo: true,
+    });
     await loadAdminData();
   }
 
@@ -194,9 +225,11 @@ export function AdminDashboardPage() {
               <h2>Cobros</h2>
             </div>
 
-            {["PORTONES", "MANTENCION"].map((concept) => (
+            {Object.keys(configForm)
+              .sort((left, right) => formatConceptLabel(left).localeCompare(formatConceptLabel(right), "es"))
+              .map((concept) => (
               <div className="config-block" key={concept}>
-                <strong>{concept}</strong>
+                <strong>{formatConceptLabel(concept)}</strong>
                 <label>
                   <span>Cuotas totales</span>
                   <input
@@ -257,12 +290,97 @@ export function AdminDashboardPage() {
                     }
                   />
                 </label>
+                <label className="checkbox-row">
+                  <input
+                    checked={Boolean(configForm[concept]?.activo)}
+                    onChange={(event) =>
+                      setConfigForm((current) => ({
+                        ...current,
+                        [concept]: {
+                          ...current[concept],
+                          activo: event.target.checked,
+                        },
+                      }))
+                    }
+                    type="checkbox"
+                  />
+                  <span>Concepto activo</span>
+                </label>
 
                 <button className="primary-button" onClick={() => handleConfigSave(concept)}>
-                  Guardar {concept}
+                  Guardar {formatConceptLabel(concept)}
                 </button>
               </div>
             ))}
+
+            <form className="config-block" onSubmit={handleCreateConcept}>
+              <strong>Nuevo concepto</strong>
+              <label>
+                <span>Nombre del concepto</span>
+                <input
+                  placeholder="Ej. PORTONES 2027"
+                  value={newConfig.concept}
+                  onChange={(event) =>
+                    setNewConfig((current) => ({ ...current, concept: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Cuotas totales</span>
+                <input
+                  value={newConfig.cuotas_totales}
+                  onChange={(event) =>
+                    setNewConfig((current) => ({
+                      ...current,
+                      cuotas_totales: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Valor cuota</span>
+                <input
+                  value={newConfig.valor_cuota}
+                  onChange={(event) =>
+                    setNewConfig((current) => ({
+                      ...current,
+                      valor_cuota: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Año</span>
+                <input
+                  value={newConfig.anio}
+                  onChange={(event) =>
+                    setNewConfig((current) => ({ ...current, anio: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                <span>Mes inicio</span>
+                <input
+                  value={newConfig.mes_inicio}
+                  onChange={(event) =>
+                    setNewConfig((current) => ({ ...current, mes_inicio: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="checkbox-row">
+                <input
+                  checked={Boolean(newConfig.activo)}
+                  onChange={(event) =>
+                    setNewConfig((current) => ({ ...current, activo: event.target.checked }))
+                  }
+                  type="checkbox"
+                />
+                <span>Concepto activo</span>
+              </label>
+              <button className="primary-button" type="submit">
+                Crear o actualizar concepto
+              </button>
+            </form>
           </article>
 
           <article className="glass-card side-card">

@@ -2,6 +2,7 @@ import { withTransaction } from "../db/pool.js";
 import { AppError } from "../lib/appError.js";
 import { normalizeConcept } from "../lib/normalizers.js";
 import { logAudit } from "./auditService.js";
+import { fetchConfigs } from "./dashboardService.js";
 import { getVecinoLedger } from "./neighborService.js";
 
 function toLegacyTipoPago(concepto) {
@@ -50,15 +51,18 @@ async function ensureVecinoExists(client, vecinoId) {
 export async function createPayment({ actor, ip, payload }) {
   const concepto = normalizeConcept(payload.concepto);
 
-  if (!["PORTONES", "MANTENCION"].includes(concepto)) {
-    throw new AppError(400, "Concepto inválido.");
-  }
-
   if (!payload.fechaPago || !payload.monto) {
     throw new AppError(400, "Fecha y monto son obligatorios.");
   }
 
   return withTransaction(async (client) => {
+    const configs = await fetchConfigs(client);
+    const conceptConfig = configs[concepto];
+
+    if (!conceptConfig) {
+      throw new AppError(400, "Concepto inválido o no configurado.");
+    }
+
     const vecino = await ensureVecinoExists(client, payload.vecinoId);
     const paymentDate = new Date(payload.fechaPago);
     const paymentColumns = await getPublicTableColumns(client, "pagos");
@@ -113,6 +117,13 @@ export async function updatePayment({ actor, ip, paymentId, payload }) {
   const concepto = normalizeConcept(payload.concepto);
 
   return withTransaction(async (client) => {
+    const configs = await fetchConfigs(client);
+    const conceptConfig = configs[concepto];
+
+    if (!conceptConfig) {
+      throw new AppError(400, "Concepto inválido o no configurado.");
+    }
+
     const paymentColumns = await getPublicTableColumns(client, "pagos");
     const currentResult = await client.query(
       `

@@ -253,6 +253,36 @@ Regla de continuidad:
     - volver dinámicos los resúmenes financieros, mapa y panel vecino
     - permitir registrar pagos para conceptos nuevos sin lógica hardcodeada
 
+### Reparación productiva de pagos Excel 2026-05-11
+- Diagnóstico final del problema de “datos random”:
+  - el código ya estaba desplegado correctamente
+  - el problema real seguía en la base productiva
+  - `LAS MALVAS 854` tenía todavía solo:
+    - `excel_resumen` de `PORTONES` por `$120.000`
+    - `excel_resumen` de `MANTENCION` por `$24.000`
+    - un pago manual de `MANTENCION` por `$10.000`
+  - faltaban los pagos mensuales reales de `$Portones` desde `Direcciones BD.xlsx`
+- Causa:
+  - producción seguía con una importación antigua basada en `Resumen`
+  - la importación `SOS` completa resultó demasiado lenta para cerrar rápido sobre Supabase
+- Solución aplicada:
+  - se creó un script temporal de reparación de producción para pagos 2026
+  - el script:
+    - borra solo `source in ('excel', 'excel_resumen')` de `period_year = 2026`
+    - conserva pagos `manual`
+    - vuelve a insertar exclusivamente los `416` pagos mensuales reales del Excel
+- Validación posterior:
+  - `LAS MALVAS 854` quedó con:
+    - 5 pagos `PORTONES` de `$40.000` (`source = excel`)
+    - 1 pago `MANTENCION` manual de `$10.000`
+  - la API live de Render devolvió:
+    - `generalStatus = Adelantado`
+    - `totalCollected = 210000`
+    - `markerLabel = 20/5`
+- Nota importante:
+  - esos valores ya no son “random”; ahora reflejan la lógica monto/cuota de la configuración activa
+  - si la comunidad quiere que `PORTONES` sea `5 cuotas x $40.000` y no `12 x $10.000`, entonces la siguiente corrección debe ser actualizar `CONFIGURACION_COBROS` productiva
+
 ## Importación Excel 2026-05-08
 - Objetivo:
   - usar `Direcciones BD.xlsx` para precargar la base real del sistema
@@ -430,3 +460,52 @@ Si se rotan credenciales:
 ## Última actualización
 - Fecha: 2026-05-11
 - Estado: código listo con mejora de zoom en mapa y legibilidad de tiles; pendiente publicación de este ajuste visual
+
+## Actualización 2026-05-11 - Migración a conceptos dinámicos
+### Qué se avanzó
+- Se eliminó el bloqueo de backend que solo aceptaba `PORTONES` y `MANTENCION` al registrar o editar pagos.
+- `updateBillingConfig` en admin ya permite crear o actualizar conceptos arbitrarios, con validación de:
+  - nombre de concepto
+  - cuotas totales
+  - valor cuota
+  - año
+  - mes de inicio
+- El panel admin ahora carga la configuración completa desde `configuracion_cobros` y permite:
+  - editar cualquier concepto existente
+  - crear un concepto nuevo desde la UI
+- El panel tesorero ahora:
+  - usa conceptos dinámicos en el selector de registro de pagos
+  - muestra resúmenes por concepto de forma dinámica
+  - muestra cuotas por concepto dinámico en la vista por vecino
+  - muestra columnas dinámicas por concepto en `Vista general`
+- El panel vecino ahora:
+  - ya no asume solo dos conceptos
+  - muestra el detalle por todos los conceptos activos/configurados
+  - muestra el contexto anónimo por concepto de forma dinámica
+- El popup del mapa también pasó a listar conceptos dinámicos.
+
+### Base de datos / esquema
+- `database/schema.sql` ya quedó preparado para instalaciones nuevas usando `text` en lugar de `payment_concept`.
+- `database/seed.sql` quedó alineado con la referencia actual:
+  - `PORTONES = 5 x 40.000`
+  - `MANTENCION = 12 x 2.000`
+- Se agregó migración dedicada:
+  - `database/migrations/20260511_dynamic_concepts.sql`
+
+### Importante sobre producción
+- Si el ambiente productivo aún tiene la columna `concepto` amarrada al enum `payment_concept`, la UI nueva podrá verse pero no permitirá crear conceptos realmente nuevos hasta ejecutar la migración SQL.
+- En otras palabras:
+  - el código ya está migrado
+  - la base productiva todavía necesita ejecutar `database/migrations/20260511_dynamic_concepts.sql` para completar la habilitación en vivo
+
+### Lo que todavía sigue histórico / no dinámico
+- La importación/exportación Excel base sigue orientada al formato histórico de:
+  - `BD`
+  - `Resumen`
+  - `$Portones`
+  - `$Mantenciones`
+- Eso está bien por ahora porque el Excel sigue siendo referencia y respaldo, pero todavía no representa un formato 100% genérico para conceptos ilimitados.
+
+### Verificación local
+- `npm run build --workspace apps/api` OK
+- `npm run build --workspace apps/web` OK

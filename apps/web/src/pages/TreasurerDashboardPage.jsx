@@ -3,19 +3,22 @@ import { LayoutShell } from "../components/LayoutShell.jsx";
 import { MapView } from "../components/MapView.jsx";
 import { StatusBadge } from "../components/StatusBadge.jsx";
 import { apiRequest } from "../lib/api.js";
-import { formatCurrency, formatDate, formatQuotas } from "../lib/formatters.js";
+import { formatConceptLabel, formatCurrency, formatDate, formatQuotas } from "../lib/formatters.js";
 
-function conceptLabel(concept) {
-  return concept === "PORTONES" ? "Portones" : concept === "MANTENCION" ? "Mantención" : concept;
+function getDefaultConcept(conceptOptions) {
+  return conceptOptions.find((concept) => concept.activo)?.concept
+    ?? conceptOptions[0]?.concept
+    ?? "";
 }
 
 function PaymentEditor({
+  conceptOptions,
   selectedVecino,
   selectedPayment,
   onSaved,
 }) {
   const [form, setForm] = useState({
-    concepto: "PORTONES",
+    concepto: getDefaultConcept(conceptOptions),
     fechaPago: new Date().toISOString().slice(0, 10),
     monto: "",
     observacion: "",
@@ -35,12 +38,12 @@ function PaymentEditor({
     }
 
     setForm({
-      concepto: "PORTONES",
+      concepto: getDefaultConcept(conceptOptions),
       fechaPago: new Date().toISOString().slice(0, 10),
       monto: "",
       observacion: "",
     });
-  }, [selectedPayment]);
+  }, [conceptOptions, selectedPayment]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -105,9 +108,13 @@ function PaymentEditor({
             onChange={(event) =>
               setForm((current) => ({ ...current, concepto: event.target.value }))
             }
+            disabled={!conceptOptions.length}
           >
-            <option value="PORTONES">Portones</option>
-            <option value="MANTENCION">Mantención</option>
+            {conceptOptions.map((concept) => (
+              <option key={concept.concept} value={concept.concept}>
+                {formatConceptLabel(concept.concept)}
+              </option>
+            ))}
           </select>
         </label>
         <label>
@@ -226,7 +233,7 @@ function BillingCommandTab({ configs, totalDirecciones }) {
               {rows.map((row) => (
                 <tr key={`${row.concepto}-${row.anio}`}>
                   <td>
-                    <strong>{conceptLabel(row.concepto)}</strong>
+                    <strong>{formatConceptLabel(row.concepto)}</strong>
                   </td>
                   <td>{row.anio}</td>
                   <td>{formatQuotas(row.cuotas_totales)}</td>
@@ -269,30 +276,25 @@ function TreasurerSummaryCards({ paymentState }) {
           <span>Sin firma</span>
           <strong>{paymentState.vecinosSinFirma}</strong>
         </div>
-        <div>
-          <span>Recaudado portones</span>
-          <strong>{formatCurrency(paymentState.totalRecaudadoPortones)}</strong>
-        </div>
-        <div>
-          <span>Recaudado mantención</span>
-          <strong>{formatCurrency(paymentState.totalRecaudadoMantencion)}</strong>
-        </div>
+        {paymentState.conceptsList.map((concept) => (
+          <div key={concept.concept}>
+            <span>{formatConceptLabel(concept.concept)}</span>
+            <strong>{formatCurrency(concept.totalRecaudado)}</strong>
+          </div>
+        ))}
       </div>
 
       <div className="executive-rows">
-        {[
-          ["Portones", paymentState.conceptos.PORTONES],
-          ["Mantención", paymentState.conceptos.MANTENCION],
-        ].map(([label, counts]) => (
-          <div className="executive-row" key={label}>
-            <strong>{label}</strong>
+        {paymentState.conceptsList.map((concept) => (
+          <div className="executive-row" key={concept.concept}>
+            <strong>{formatConceptLabel(concept.concept)}</strong>
             <span>
               Vecinos al día
-              <b>{counts.alDia}</b>
+              <b>{concept.alDia}</b>
             </span>
             <span>
               Vecinos atrasados
-              <b>{counts.atrasados}</b>
+              <b>{concept.atrasados}</b>
             </span>
           </div>
         ))}
@@ -366,14 +368,13 @@ function SelectedNeighborSummary({ ledger }) {
       </div>
 
       <div className="quota-progress-card">
-        <ConceptQuotaRow
-          concept={ledger.summary.concepts.PORTONES}
-          label="Portones 2026"
-        />
-        <ConceptQuotaRow
-          concept={ledger.summary.concepts.MANTENCION}
-          label="Mantención 2026"
-        />
+        {ledger.summary.conceptsList.map((concept) => (
+          <ConceptQuotaRow
+            concept={concept}
+            key={concept.concept}
+            label={formatConceptLabel(concept.concept)}
+          />
+        ))}
       </div>
     </article>
   );
@@ -406,7 +407,7 @@ function LedgerTable({ ledger, onEdit }) {
             {ledger.payments.map((payment) => (
               <tr key={payment.id}>
                 <td>{formatDate(payment.fecha_pago)}</td>
-                <td>{payment.concepto}</td>
+                <td>{formatConceptLabel(payment.concepto)}</td>
                 <td>{formatCurrency(payment.monto)}</td>
                 <td>{formatQuotas(payment.equivalentQuotas)}</td>
                 <td>
@@ -427,7 +428,7 @@ function LedgerTable({ ledger, onEdit }) {
   );
 }
 
-function OverviewTable({ financials, onExport, exporting }) {
+function OverviewTable({ conceptColumns, financials, onExport, exporting }) {
   const [filter, setFilter] = useState("");
 
   const rows = useMemo(() => {
@@ -475,8 +476,9 @@ function OverviewTable({ financials, onExport, exporting }) {
                 <th>Representante</th>
                 <th>Firma</th>
                 <th>Estado</th>
-                <th>Portones 2026</th>
-                <th>Mantención 2026</th>
+                {conceptColumns.map((concept) => (
+                  <th key={concept.concept}>{formatConceptLabel(concept.concept)}</th>
+                ))}
                 <th>Total abonado</th>
                 <th>Saldo pendiente</th>
               </tr>
@@ -494,12 +496,17 @@ function OverviewTable({ financials, onExport, exporting }) {
                   </td>
                   <td>{item.firmaVobo ? "Sí" : "No"}</td>
                   <td><StatusBadge value={item.generalStatus} /></td>
-                  <td>
-                    {formatQuotas(item.concepts.PORTONES.equivalentQuotas)} de {formatQuotas(item.concepts.PORTONES.totalQuotas)}
-                  </td>
-                  <td>
-                    {formatQuotas(item.concepts.MANTENCION.equivalentQuotas)} de {formatQuotas(item.concepts.MANTENCION.totalQuotas)}
-                  </td>
+                  {conceptColumns.map((concept) => {
+                    const conceptSummary = item.concepts[concept.concept];
+
+                    return (
+                      <td key={`${item.vecinoId}:${concept.concept}`}>
+                        {conceptSummary
+                          ? `${formatQuotas(conceptSummary.equivalentQuotas)} de ${formatQuotas(conceptSummary.totalQuotas)}`
+                          : "Sin datos"}
+                      </td>
+                    );
+                  })}
                   <td>{formatCurrency(item.totalCollected)}</td>
                   <td>{formatCurrency(item.totalPending)}</td>
                 </tr>
@@ -523,6 +530,22 @@ export function TreasurerDashboardPage() {
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [activeTab, setActiveTab] = useState("resumen");
   const [exporting, setExporting] = useState(false);
+  const conceptOptions = useMemo(
+    () =>
+      overview
+        ? Object.values(overview.configs).sort((a, b) => {
+            if (Number(a.anio) !== Number(b.anio)) {
+              return Number(a.anio) - Number(b.anio);
+            }
+
+            return formatConceptLabel(a.concepto).localeCompare(
+              formatConceptLabel(b.concepto),
+              "es",
+            );
+          })
+        : [],
+    [overview],
+  );
 
   async function loadOverview() {
     setLoading(true);
@@ -676,6 +699,7 @@ export function TreasurerDashboardPage() {
               </article>
 
               <PaymentEditor
+                conceptOptions={conceptOptions}
                 selectedVecino={selectedVecino}
                 selectedPayment={selectedPayment}
                 onSaved={async () => {
@@ -711,6 +735,7 @@ export function TreasurerDashboardPage() {
 
         {activeTab === "vista" ? (
           <OverviewTable
+            conceptColumns={conceptOptions}
             exporting={exporting}
             financials={overview.financials}
             onExport={handleExport}
