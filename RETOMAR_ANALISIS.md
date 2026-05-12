@@ -230,6 +230,29 @@ Regla de continuidad:
   - si en producción existían pagos válidos con concepto en minúscula, vuelven a sumarse correctamente
   - el panel vecino deja de mostrar `0 de 12` por un problema de normalización
 
+### Pestaña `Mando de cobros` en tesorería 2026-05-11
+- Requerimiento:
+  - preparar la plataforma para operación en régimen desde la propia plataforma y no desde Excel
+  - exponer en el portal tesorero una vista tipo mando que muestre:
+    - concepto
+    - cantidad de cuotas
+    - valor cuota
+    - total esperado por casa
+    - total esperado comunidad
+- Solución aplicada:
+  - `TreasurerDashboardPage` ahora tiene una pestaña adicional `Mando de cobros`
+  - la vista se alimenta desde `CONFIGURACION_COBROS` real (`overview.configs`)
+  - calcula:
+    - total por casa = `cuotas_totales * valor_cuota`
+    - total comunidad = `total por casa * totalDirecciones`
+- Limitación actual declarada:
+  - la pestaña ya quedó lista como base operativa y puede leer múltiples filas de configuración
+  - pero el backend y el esquema completo todavía siguen muy orientados a `PORTONES` y `MANTENCION`
+  - para soportar más de 2 conceptos de recaudación en todo el sistema se requerirá una segunda fase:
+    - migrar `payment_concept` / `configuracion_cobros`
+    - volver dinámicos los resúmenes financieros, mapa y panel vecino
+    - permitir registrar pagos para conceptos nuevos sin lógica hardcodeada
+
 ## Importación Excel 2026-05-08
 - Objetivo:
   - usar `Direcciones BD.xlsx` para precargar la base real del sistema

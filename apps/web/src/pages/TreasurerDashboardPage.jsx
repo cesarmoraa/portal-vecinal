@@ -5,6 +5,10 @@ import { StatusBadge } from "../components/StatusBadge.jsx";
 import { apiRequest } from "../lib/api.js";
 import { formatCurrency, formatDate, formatQuotas } from "../lib/formatters.js";
 
+function conceptLabel(concept) {
+  return concept === "PORTONES" ? "Portones" : concept === "MANTENCION" ? "Mantención" : concept;
+}
+
 function PaymentEditor({
   selectedVecino,
   selectedPayment,
@@ -157,6 +161,94 @@ function ConceptQuotaRow({ concept, label }) {
         {formatQuotas(concept.equivalentQuotas)} de {formatQuotas(concept.totalQuotas)} cuotas
       </strong>
     </div>
+  );
+}
+
+function BillingCommandTab({ configs, totalDirecciones }) {
+  const rows = Object.values(configs)
+    .sort((a, b) => {
+      if (Number(a.anio) !== Number(b.anio)) {
+        return Number(a.anio) - Number(b.anio);
+      }
+
+      return conceptLabel(a.concepto).localeCompare(conceptLabel(b.concepto), "es");
+    })
+    .map((config) => {
+      const totalPorCasa = Number(config.cuotas_totales) * Number(config.valor_cuota);
+      const totalComunidad = totalPorCasa * Number(totalDirecciones);
+
+      return {
+        ...config,
+        totalPorCasa,
+        totalComunidad,
+      };
+    });
+
+  return (
+    <section className="stack-form">
+      <article className="glass-card side-card">
+        <div className="card-heading">
+          <p className="eyebrow">Mando de cobros</p>
+          <h2>Conceptos, cuotas y meta comunitaria</h2>
+        </div>
+
+        <p className="subtitle">
+          Esta pestaña define la base operativa de la recaudación en régimen: qué se cobra,
+          cuántas cuotas tiene cada concepto y cuál es la meta esperada por casa y para toda
+          la comunidad.
+        </p>
+
+        <div className="summary-grid compact">
+          <div>
+            <span>Direcciones consideradas</span>
+            <strong>{totalDirecciones}</strong>
+          </div>
+          <div>
+            <span>Conceptos activos</span>
+            <strong>{rows.filter((item) => item.activo).length}</strong>
+          </div>
+        </div>
+
+        <div className="table-wrap executive-table-wrap">
+          <table className="data-table command-table">
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th>Año</th>
+                <th># Cuotas</th>
+                <th>$ Cuota</th>
+                <th>Total por casa</th>
+                <th>Total comunidad</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.concepto}-${row.anio}`}>
+                  <td>
+                    <strong>{conceptLabel(row.concepto)}</strong>
+                  </td>
+                  <td>{row.anio}</td>
+                  <td>{formatQuotas(row.cuotas_totales)}</td>
+                  <td>{formatCurrency(row.valor_cuota)}</td>
+                  <td>{formatCurrency(row.totalPorCasa)}</td>
+                  <td>{formatCurrency(row.totalComunidad)}</td>
+                  <td>
+                    <StatusBadge value={row.activo ? "Al día" : "Sin datos"} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <p className="subtitle">
+          Hoy el sistema operativo sigue consolidado en dos conceptos principales, pero esta
+          vista ya deja visible la estructura que después debe gobernar toda la plataforma
+          desde la propia configuración de cobros.
+        </p>
+      </article>
+    </section>
   );
 }
 
@@ -540,6 +632,13 @@ export function TreasurerDashboardPage() {
           >
             Vista general
           </button>
+          <button
+            className={activeTab === "cobros" ? "section-tab active" : "section-tab"}
+            onClick={() => setActiveTab("cobros")}
+            type="button"
+          >
+            Mando de cobros
+          </button>
         </section>
 
         {activeTab === "resumen" ? (
@@ -615,6 +714,13 @@ export function TreasurerDashboardPage() {
             exporting={exporting}
             financials={overview.financials}
             onExport={handleExport}
+          />
+        ) : null}
+
+        {activeTab === "cobros" ? (
+          <BillingCommandTab
+            configs={overview.configs}
+            totalDirecciones={overview.paymentState.totalDirecciones}
           />
         ) : null}
       </main>
